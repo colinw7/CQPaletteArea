@@ -1,0 +1,4 @@
+CQPaletteArea
+=============
+
+QMainWindow Palette Layout
