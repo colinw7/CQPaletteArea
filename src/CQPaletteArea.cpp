@@ -11,8 +11,12 @@
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include <QRubberBand>
+#include <QMenu>
 #include <cassert>
 #include <iostream>
+
+#include <pin.xpm>
+#include <unpin.xpm>
 
 namespace Constants {
   int splitter_tol = 8;
@@ -82,6 +86,32 @@ removePage(CQPaletteAreaPage *page)
   window->removePage(page);
 }
 
+void
+CQPaletteAreaMgr::
+showExpandedPage(CQPaletteAreaPage *page)
+{
+  CQPaletteGroup *group = page->group();
+  assert(group);
+
+  CQPaletteWindow *window = group->window();
+  assert(window);
+
+  window->showPage(page);
+}
+
+void
+CQPaletteAreaMgr::
+hidePage(CQPaletteAreaPage *page)
+{
+  CQPaletteGroup *group = page->group();
+  assert(group);
+
+  CQPaletteWindow *window = group->window();
+  assert(window);
+
+  window->hidePage(page);
+}
+
 CQPaletteWindow *
 CQPaletteAreaMgr::
 addWindow(Qt::DockWidgetArea dockArea)
@@ -101,10 +131,13 @@ removeWindow(CQPaletteWindow *window)
 
 CQPaletteArea *
 CQPaletteAreaMgr::
-getAreaAt(const QPoint &pos) const
+getAreaAt(const QPoint &pos, Qt::DockWidgetAreas allowedAreas) const
 {
   for (Palettes::const_iterator p = palettes_.begin(); p != palettes_.end(); ++p) {
     CQPaletteArea *area = (*p).second;
+
+    if (! (area->dockArea() & allowedAreas))
+      continue;
 
     QRect rect = area->getHighlightRect();
 
@@ -113,6 +146,32 @@ getAreaAt(const QPoint &pos) const
   }
 
   return 0;
+}
+
+void
+CQPaletteAreaMgr::
+swapAreas(CQPaletteArea *area1, CQPaletteArea *area2)
+{
+  Qt::DockWidgetArea dockArea1 = area1->dockArea();
+  Qt::DockWidgetArea dockArea2 = area2->dockArea();
+
+  QString name1 = area1->objectName();
+  QString name2 = area2->objectName();
+
+  area1->setDockArea(dockArea2);
+  area2->setDockArea(dockArea1);
+
+  area1->setObjectName(name2);
+  area2->setObjectName(name1);
+
+  palettes_[area1->dockArea()] = area1;
+  palettes_[area2->dockArea()] = area2;
+
+  window()->addDockWidget(area1->dockArea(), area1);
+  window()->addDockWidget(area2->dockArea(), area2);
+
+  area1->updateDockArea();
+  area2->updateDockArea();
 }
 
 void
@@ -137,22 +196,32 @@ clearHighlight()
 
 CQPaletteArea::
 CQPaletteArea(CQPaletteAreaMgr *mgr, Qt::DockWidgetArea dockArea) :
- CQDockArea(mgr->window()), mgr_(mgr), dockArea_(dockArea)
+ CQDockArea(mgr->window()), mgr_(mgr), dockArea_(dockArea), expanded_(true),
+ pinned_(true), floating_(false)
 {
   setObjectName("area");
 
   // remove title bar and lock in place
-  setTitleBarWidget(new QWidget(this));
+  title_ = new CQPaletteAreaTitle(this);
+
+  title_->updateDockArea();
+
+  setTitleBarWidget(title_);
 
   setAllowedAreas(dockArea);
 
-  setFeatures(0);
+  if (dockArea_ == Qt::LeftDockWidgetArea || dockArea_ == Qt::RightDockWidgetArea)
+    setFeatures(0);
+  else
+    setFeatures(QDockWidget::DockWidgetVerticalTitleBar);
 
   // add to main window
   mgr_->window()->addDockWidget(dockArea, this);
 
   // add splitter
   splitter_ = new QSplitter;
+
+  splitter_->setObjectName("splitter");
 
   if (dockArea_ == Qt::LeftDockWidgetArea || dockArea_ == Qt::RightDockWidgetArea)
     splitter_->setOrientation(Qt::Vertical);
@@ -192,6 +261,8 @@ addWindow(CQPaletteWindow *window)
   window->show();
 
   splitter_->addWidget(window);
+
+  updateSplitterSizes();
 
   windows_.push_back(window);
 
@@ -278,6 +349,8 @@ addWindowAtPos(CQPaletteWindow *window, const QPoint &gpos)
   else
     splitter_->addWidget(window);
 
+  updateSplitterSizes();
+
   windows_.push_back(window);
 
   show();
@@ -312,10 +385,242 @@ removeWindow(CQPaletteWindow *window)
   updateSize();
 }
 
+void
+CQPaletteArea::
+updateSplitterSizes()
+{
+  QList<int> sizes;
+
+  int n = splitter_->count();
+
+  if (dockArea_ == Qt::LeftDockWidgetArea || dockArea_ == Qt::RightDockWidgetArea) {
+    int h = splitter_->height();
+
+    for (int i = 0; i < n; ++ i) {
+      int h1 = h/(n - i);
+
+      sizes.push_back(h1);
+
+      h -= h1;
+    }
+  }
+  else {
+    int w = splitter_->width();
+
+    for (int i = 0; i < n; ++ i) {
+      int w1 = w/(n - i);
+
+      sizes.push_back(w1);
+
+      w -= w1;
+    }
+  }
+
+  splitter_->setSizes(sizes);
+}
+
+void
+CQPaletteArea::
+updateDockArea()
+{
+  setAllowedAreas(dockArea_);
+
+  if (dockArea_ == Qt::LeftDockWidgetArea || dockArea_ == Qt::RightDockWidgetArea)
+    setFeatures(0);
+  else
+    setFeatures(QDockWidget::DockWidgetVerticalTitleBar);
+
+  title_->updateDockArea();
+
+  if (dockArea_ == Qt::LeftDockWidgetArea || dockArea_ == Qt::RightDockWidgetArea)
+    splitter_->setOrientation(Qt::Vertical);
+  else
+    splitter_->setOrientation(Qt::Horizontal);
+
+  for (Windows::iterator p = windows_.begin(); p != windows_.end(); ++p) {
+    CQPaletteWindow *window = *p;
+
+    window->updateDockArea();
+    window->updateLayout();
+  }
+}
+
+void
+CQPaletteArea::
+expandSlot()
+{
+  if (expanded_) return;
+
+  if (dockArea() == Qt::LeftDockWidgetArea || dockArea() == Qt::RightDockWidgetArea)
+    setDockWidth(dockWidth(), false);
+  else
+    setDockHeight(dockHeight(), false);
+
+  title_->updateState();
+
+  expanded_ = true;
+}
+
+void
+CQPaletteArea::
+collapseSlot()
+{
+  if (! expanded_) return;
+
+  int w = 1;
+
+  for (Windows::iterator p = windows_.begin(); p != windows_.end(); ++p) {
+    CQPaletteWindow *window = *p;
+
+    if (dockArea() == Qt::LeftDockWidgetArea || dockArea() == Qt::RightDockWidgetArea)
+      w = std::max(w, window->dockWidth());
+    else
+      w = std::max(w, window->dockHeight());
+  }
+
+  if (dockArea() == Qt::LeftDockWidgetArea || dockArea() == Qt::RightDockWidgetArea)
+    setDockWidth(w, true);
+  else
+    setDockHeight(w, true);
+
+  title_->updateState();
+
+  expanded_ = false;
+}
+
+void
+CQPaletteArea::
+pinSlot()
+{
+  if (pinned_) return;
+
+  pinned_ = true;
+}
+
+void
+CQPaletteArea::
+unpinSlot()
+{
+  if (! pinned_) return;
+
+  pinned_ = false;
+}
+
+CQPaletteArea::Pages
+CQPaletteArea::
+getPages() const
+{
+  Pages pages;
+
+  for (Windows::const_iterator p = windows_.begin(); p != windows_.end(); ++p) {
+    CQPaletteWindow *window = *p;
+
+    CQPaletteWindow::Pages pages1 = window->getPages();
+
+    std::copy(pages1.begin(), pages1.end(), std::back_inserter(pages));
+  }
+
+  return pages;
+}
+
+void
+CQPaletteArea::
+setFloating(bool floating, const QPoint &pos)
+{
+  if (floating == floating_)
+    return;
+
+  if (floating) {
+    QPoint lpos = mapFromGlobal(pos);
+
+    setParent(0, Qt::FramelessWindowHint);
+
+    move(pos - lpos);
+
+    allowedAreas_ = Qt::AllDockWidgetAreas;
+
+    Pages pages = getPages();
+
+    for (Pages::const_iterator p = pages.begin(); p != pages.end(); ++p) {
+      CQPaletteAreaPage *page = *p;
+
+      allowedAreas_ &= page->allowedAreas();
+    }
+  }
+  else
+    mgr_->window()->addDockWidget(dockArea(), this);
+
+  floating_ = floating;
+
+  show();
+}
+
+void
+CQPaletteArea::
+cancelFloating()
+{
+  mgr_->window()->addDockWidget(dockArea(), this);
+
+  floating_ = false;
+}
+
+void
+CQPaletteArea::
+animateDrop(const QPoint &p)
+{
+  CQPaletteArea *area = mgr_->getAreaAt(p, allowedAreas_);
+
+  if (area)
+    mgr_->highlightArea(area, p);
+  else
+    clearDrop();
+}
+
+void
+CQPaletteArea::
+execDrop(const QPoint &gpos)
+{
+  CQPaletteArea *area = mgr_->getAreaAt(gpos, allowedAreas_);
+
+  if (area && area != this) {
+    if (area->windows_.empty()) {
+      mgr_->swapAreas(this, area);
+    }
+    else {
+      // TODO: keep splitters ...
+      Windows windows = windows_;
+
+      for (Windows::iterator p = windows.begin(); p != windows.end(); ++p) {
+        CQPaletteWindow *window = *p;
+
+        this->removeWindow(window);
+
+        area->addWindowAtPos(window, gpos);
+      }
+
+      mgr_->window()->addDockWidget(area->dockArea(), area);
+
+      hide();
+    }
+  }
+
+  clearDrop();
+}
+
+void
+CQPaletteArea::
+clearDrop()
+{
+  mgr_->clearHighlight();
+}
+
 QRect
 CQPaletteArea::
 getHighlightRectAtPos(const QPoint &gpos) const
 {
+  if (isFloating())
+    return getHighlightRect();
+
   int tol = Constants::splitter_tol;
 
   QRect    rect;
@@ -368,7 +673,7 @@ getHighlightRect() const
 
   QRect rect;
 
-  if (! windows_.empty()) {
+  if (! floating_ && ! windows_.empty()) {
     rect = geometry();
 
     rect.adjust(dx, dy, dx, dy);
@@ -487,6 +792,69 @@ setArea(CQPaletteArea *area)
 
   if (! area_) return;
 
+  updateLayout();
+
+  updateDockArea();
+}
+
+void
+CQPaletteWindow::
+addPage(CQPaletteAreaPage *page)
+{
+  group_->addPage(page);
+}
+
+void
+CQPaletteWindow::
+insertPage(int ind, CQPaletteAreaPage *page)
+{
+  group_->insertPage(ind, page);
+}
+
+void
+CQPaletteWindow::
+removePage(CQPaletteAreaPage *page)
+{
+  group_->removePage(page);
+
+  if (! group_->numPages()) {
+    area_->removeWindow(this);
+
+    this->deleteLater();
+  }
+}
+
+void
+CQPaletteWindow::
+showPage(CQPaletteAreaPage *page)
+{
+  group_->showPage(page);
+
+  if (group_->numPages() > 0)
+    setVisible(true);
+}
+
+void
+CQPaletteWindow::
+hidePage(CQPaletteAreaPage *page)
+{
+  group_->hidePage(page);
+
+  if (group_->numPages() == 0)
+    setVisible(false);
+}
+
+void
+CQPaletteWindow::
+setCurrentPage(CQPaletteAreaPage *page)
+{
+  group_->setCurrentPage(page);
+}
+
+void
+CQPaletteWindow::
+updateLayout()
+{
   QGridLayout *l = qobject_cast<QGridLayout *>(layout());
 
   QLayoutItem *child;
@@ -503,23 +871,40 @@ setArea(CQPaletteArea *area)
     l->addWidget(title_, 0, 0);
     l->addWidget(group_, 0, 1);
   }
+}
 
+void
+CQPaletteWindow::
+updateDockArea()
+{
   title_->updateDockArea();
   group_->updateDockArea();
 }
 
-void
+int
 CQPaletteWindow::
-addPage(CQPaletteAreaPage *page)
+dockWidth() const
 {
-  group_->addPage(page);
+  return group_->tabbar()->width();
+}
+
+int
+CQPaletteWindow::
+dockHeight() const
+{
+  return group_->tabbar()->height();
 }
 
 void
 CQPaletteWindow::
-removePage(CQPaletteAreaPage *page)
+expand()
 {
-  group_->removePage(page);
+}
+
+void
+CQPaletteWindow::
+collapse()
+{
 }
 
 QString
@@ -547,6 +932,17 @@ pageChangedSlot(CQPaletteAreaPage *)
   title_->update();
 }
 
+CQPaletteWindow::Pages
+CQPaletteWindow::
+getPages() const
+{
+  CQPaletteGroup::PageArray pages;
+
+  group()->getPages(pages);
+
+  return pages;
+}
+
 void
 CQPaletteWindow::
 setFloating(bool floating, const QPoint &pos)
@@ -555,22 +951,28 @@ setFloating(bool floating, const QPoint &pos)
     return;
 
   if (floating) {
-    CQPaletteGroup::PageArray pages;
+    CQPaletteGroup::PageArray pages = getPages();
 
-    group()->getPages(pages);
+    CQPaletteAreaPage *currentPage = group_->currentPage();
+
+    allowedAreas_ = currentPage->allowedAreas();
 
     if (pages.size() > 1) {
-      CQPaletteWindow *newWindow = mgr_->addWindow(area_->dockArea());
+      newWindow_ = mgr_->addWindow(area_->dockArea());
 
-      CQPaletteAreaPage *currentPage = group_->currentPage();
+      parentPos_ = group_->currentIndex();
 
       for (uint i = 0; i < pages.size(); ++i) {
         if (pages[i] == currentPage) continue;
 
-        group_->removePage(pages[i]);
+        removePage(pages[i]);
 
-        newWindow->addPage(pages[i]);
+        newWindow_->addPage(pages[i]);
       }
+    }
+    else {
+      newWindow_ = 0;
+      parentPos_ = area_->splitter()->indexOf(this); // whole window
     }
 
     parent_ = parentWidget();
@@ -591,9 +993,30 @@ setFloating(bool floating, const QPoint &pos)
 
 void
 CQPaletteWindow::
+cancelFloating()
+{
+  if (! newWindow_)
+    area_->splitter()->insertWidget(parentPos_, this);
+  else {
+    CQPaletteAreaPage *currentPage = group_->currentPage();
+
+    removePage(currentPage);
+
+    newWindow_->insertPage(parentPos_, currentPage);
+
+    newWindow_->setCurrentPage(currentPage);
+
+    mgr_->removeWindow(this);
+
+    this->deleteLater();
+  }
+}
+
+void
+CQPaletteWindow::
 animateDrop(const QPoint &p)
 {
-  CQPaletteArea *area = mgr_->getAreaAt(p);
+  CQPaletteArea *area = mgr_->getAreaAt(p, allowedAreas_);
 
   if (area)
     mgr_->highlightArea(area, p);
@@ -603,14 +1026,16 @@ animateDrop(const QPoint &p)
 
 void
 CQPaletteWindow::
-execDrop(const QPoint &p)
+execDrop(const QPoint &gpos)
 {
-  CQPaletteArea *area = mgr_->getAreaAt(p);
+  CQPaletteArea *area = mgr_->getAreaAt(gpos, allowedAreas_);
 
   if (area) {
     area_->removeWindow(this);
 
-    area->addWindowAtPos(this, p);
+    area->addWindowAtPos(this, gpos);
+
+    mgr_->window()->addDockWidget(area->dockArea(), area);
   }
 
   clearDrop();
@@ -627,6 +1052,9 @@ void
 CQPaletteWindow::
 closeSlot()
 {
+  CQPaletteAreaPage *page = group_->currentPage();
+
+  removePage(page);
 }
 
 QSize
@@ -654,15 +1082,238 @@ sizeHint() const
 
 //------
 
+CQPaletteAreaTitle::
+CQPaletteAreaTitle(CQPaletteArea *area) :
+ area_(area), contextMenu_(0)
+{
+  pinButton_    = addButton(QPixmap(pin_data));
+  expandButton_ = addButton(style()->standardIcon(QStyle::SP_TitleBarShadeButton, 0, this));
+
+  connect(pinButton_   , SIGNAL(clicked()), this, SLOT(pinSlot()));
+  connect(expandButton_, SIGNAL(clicked()), this, SLOT(expandSlot()));
+
+  setAttribute(Qt::WA_Hover);
+
+  setFocusPolicy(Qt::NoFocus);
+
+  setContextMenuPolicy(Qt::DefaultContextMenu);
+
+  updateState();
+}
+
+void
+CQPaletteAreaTitle::
+updateDockArea()
+{
+  if (area_->dockArea() == Qt::LeftDockWidgetArea ||
+      area_->dockArea() == Qt::RightDockWidgetArea)
+    setOrientation(Qt::Horizontal);
+  else
+    setOrientation(Qt::Vertical);
+}
+
+QString
+CQPaletteAreaTitle::
+title() const
+{
+  return "";
+}
+
+QIcon
+CQPaletteAreaTitle::
+icon() const
+{
+  return QIcon();
+}
+
+void
+CQPaletteAreaTitle::
+pinSlot()
+{
+  if (area_->isPinned())
+    area_->unpinSlot();
+  else
+    area_->pinSlot();
+
+  updateState();
+}
+
+void
+CQPaletteAreaTitle::
+expandSlot()
+{
+  if (area_->isExpanded())
+    area_->collapseSlot();
+  else
+    area_->expandSlot();
+
+  updateState();
+}
+
+void
+CQPaletteAreaTitle::
+updateState()
+{
+  if (area_->isExpanded()) {
+    pinButton_->setVisible(true);
+
+    if (area_->isPinned())
+      pinButton_->setIcon(QPixmap(unpin_data));
+    else
+      pinButton_->setIcon(QPixmap(pin_data));
+  }
+  else
+    pinButton_->setVisible(false);
+
+  if (area_->isExpanded())
+    expandButton_->setIcon(style()->standardIcon(QStyle::SP_TitleBarUnshadeButton, 0, this));
+  else
+    expandButton_->setIcon(style()->standardIcon(QStyle::SP_TitleBarShadeButton, 0, this));
+
+  updateLayout();
+}
+
+void
+CQPaletteAreaTitle::
+contextMenuEvent(QContextMenuEvent *e)
+{
+  if (! contextMenu_) {
+    contextMenu_ = new QMenu(this);
+
+    QAction *pinAction    = contextMenu_->addAction("Pin");
+    QAction *expandAction = contextMenu_->addAction("Expand");
+
+    connect(pinAction   , SIGNAL(triggered()), this, SLOT(pinSlot()));
+    connect(expandAction, SIGNAL(triggered()), this, SLOT(expandSlot()));
+  }
+
+  QList<QAction *> actions = contextMenu_->actions();
+
+  for (int i = 0; i < actions.size(); ++i) {
+    QAction *action = actions.at(i);
+
+    const QString &text = action->text();
+
+    if      (text == "Pin" || text == "Unpin") {
+      if (area_->isPinned())
+        action->setText("Unpin");
+      else
+        action->setText("Pin");
+    }
+    else if (text == "Expand" || text == "Collapse") {
+      if (area_->isExpanded())
+        action->setText("Collapse");
+      else
+        action->setText("Expand");
+    }
+  }
+
+  contextMenu_->popup(e->globalPos());
+
+  e->accept();
+}
+
+void
+CQPaletteAreaTitle::
+mousePressEvent(QMouseEvent *e)
+{
+  mouseState_.reset();
+
+  mouseState_.pressed  = true;
+  mouseState_.pressPos = e->globalPos();
+
+  setFocusPolicy(Qt::StrongFocus);
+}
+
+void
+CQPaletteAreaTitle::
+mouseMoveEvent(QMouseEvent *e)
+{
+  if (! mouseState_.pressed || mouseState_.escapePress) return;
+
+  if (! mouseState_.moving &&
+      (e->globalPos() - mouseState_.pressPos).manhattanLength() < QApplication::startDragDistance())
+    return;
+
+  mouseState_.moving = true;
+
+  if (! area_->isFloating())
+    area_->setFloating(true, e->globalPos());
+
+  int dx = e->globalPos().x() - mouseState_.pressPos.x();
+  int dy = e->globalPos().y() - mouseState_.pressPos.y();
+
+  area_->move(area_->pos() + QPoint(dx, dy));
+
+  area_->animateDrop(e->globalPos());
+
+  mouseState_.pressPos = e->globalPos();
+}
+
+void
+CQPaletteAreaTitle::
+mouseReleaseEvent(QMouseEvent *e)
+{
+  if (! mouseState_.moving || mouseState_.escapePress)
+    return;
+
+  area_->setFloating(false);
+
+  area_->execDrop(e->globalPos());
+
+  mouseState_.reset();
+
+  setFocusPolicy(Qt::NoFocus);
+}
+
+void
+CQPaletteAreaTitle::
+keyPressEvent(QKeyEvent *e)
+{
+  if (e->key() == Qt::Key_Escape && ! mouseState_.escapePress) {
+    mouseState_.escapePress = true;
+
+    area_->cancelFloating();
+
+    area_->clearDrop();
+  }
+}
+
+bool
+CQPaletteAreaTitle::
+event(QEvent *e)
+{
+  switch (e->type()) {
+    case QEvent::HoverEnter:
+      setCursor(Qt::SizeAllCursor);
+      break;
+    case QEvent::HoverLeave:
+      unsetCursor();
+      break;
+    default:
+      break;
+  }
+
+  return QWidget::event(e);
+}
+
+//------
+
 CQPaletteWindowTitle::
 CQPaletteWindowTitle(CQPaletteWindow *window) :
- window_(window)
+ window_(window), contextMenu_(0)
 {
   closeButton_ = addButton(style()->standardIcon(QStyle::SP_TitleBarCloseButton, 0, this));
 
-  connect(closeButton_, SIGNAL(clicked()), window, SLOT(closeSlot()));
+  connect(closeButton_, SIGNAL(clicked()), window_, SLOT(closeSlot()));
+
+  closeButton_->setToolTip("Close");
 
   setAttribute(Qt::WA_Hover);
+
+  setFocusPolicy(Qt::NoFocus);
+
+  setContextMenuPolicy(Qt::DefaultContextMenu);
 }
 
 void
@@ -692,11 +1343,33 @@ icon() const
 
 void
 CQPaletteWindowTitle::
+contextMenuEvent(QContextMenuEvent *e)
+{
+  if (! contextMenu_) {
+    contextMenu_ = new QMenu(this);
+
+    // TODO: add pages
+
+    QAction *closeAction = contextMenu_->addAction("Close");
+
+    connect(closeAction, SIGNAL(triggered()), window_, SLOT(closeSlot()));
+  }
+
+  contextMenu_->popup(e->globalPos());
+
+  e->accept();
+}
+
+void
+CQPaletteWindowTitle::
 mousePressEvent(QMouseEvent *e)
 {
+  mouseState_.reset();
+
   mouseState_.pressed  = true;
-  mouseState_.moving   = false;
   mouseState_.pressPos = e->globalPos();
+
+  setFocusPolicy(Qt::StrongFocus);
 }
 
 void
@@ -728,7 +1401,7 @@ void
 CQPaletteWindowTitle::
 mouseReleaseEvent(QMouseEvent *e)
 {
-  if (! mouseState_.moving)
+  if (! mouseState_.moving || mouseState_.escapePress)
     return;
 
   window_->setFloating(false);
@@ -736,14 +1409,21 @@ mouseReleaseEvent(QMouseEvent *e)
   window_->execDrop(e->globalPos());
 
   mouseState_.reset();
+
+  setFocusPolicy(Qt::NoFocus);
 }
 
 void
 CQPaletteWindowTitle::
 keyPressEvent(QKeyEvent *e)
 {
-  if (e->key() == Qt::Key_Escape)
+  if (e->key() == Qt::Key_Escape && ! mouseState_.escapePress) {
     mouseState_.escapePress = true;
+
+    window_->cancelFloating();
+
+    window_->clearDrop();
+  }
 }
 
 bool

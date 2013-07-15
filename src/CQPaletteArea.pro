@@ -8,9 +8,9 @@ CONFIG += staticlib
 
 # Input
 HEADERS += \
-CQPaletteArea.h \
-CQPaletteGroup.h \
-CQDockArea.h \
+../include/CQPaletteArea.h \
+../include/CQDockArea.h \
+../include/CQPaletteGroup.h \
 
 SOURCES += \
 CQPaletteArea.cpp \
@@ -21,4 +21,4 @@ OBJECTS_DIR = ../obj
 
 DESTDIR = ../lib
 
-INCLUDEPATH += . ../../CQTitleBar/src
+INCLUDEPATH += . ../include ../../CQTitleBar/include

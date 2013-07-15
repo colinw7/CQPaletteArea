@@ -33,13 +33,23 @@ class CQPaletteGroup : public QWidget {
 
   void updateDockArea();
 
-  uint numPages() const { return pages_.size(); }
+  uint numPages() const;
 
   void addPage(CQPaletteAreaPage *page);
 
+  void insertPage(int ind, CQPaletteAreaPage *page);
+
   void removePage(CQPaletteAreaPage *page);
 
+  void showPage(CQPaletteAreaPage *page);
+
+  void hidePage(CQPaletteAreaPage *page);
+
   CQPaletteAreaPage *currentPage() const;
+
+  int currentIndex() const;
+
+  void setCurrentPage(CQPaletteAreaPage *page);
 
   CQPaletteAreaPage *getPage(int i) const;
 
@@ -82,6 +92,8 @@ class CQPaletteGroupTabBar : public QTabBar {
 
   void addPage(CQPaletteAreaPage *page);
 
+  void insertPage(int ind, CQPaletteAreaPage *page);
+
   void removePage(CQPaletteAreaPage *page);
 
   uint getPageId(int ind) const;
@@ -121,26 +133,30 @@ class CQPaletteAreaPage : public QObject {
   virtual ~CQPaletteAreaPage() { }
 
   CQPaletteGroup *group() const { return group_; }
-
   void setGroup(CQPaletteGroup *group) { group_ = group; }
 
   QWidget *widget() const { return w_; }
-
   void setWidget(QWidget *w) { w_ = w; }
 
   uint id() const { return id_; }
+
+  bool hidden() const { return hidden_; }
+  void setHidden(bool hidden) { hidden_ = hidden; }
 
   virtual QString windowTitle() const { return ""; }
 
   virtual QString title() const { return ""; }
   virtual QIcon   icon () const { return QIcon(); }
 
+  virtual Qt::DockWidgetAreas allowedAreas() const { return Qt::AllDockWidgetAreas; }
+
  private:
   static uint lastId_;
 
-  CQPaletteGroup *group_; // parent group
-  QWidget        *w_;     // child widget
-  uint            id_;    // unique id
+  CQPaletteGroup *group_;  // parent group
+  QWidget        *w_;      // child widget
+  uint            id_;     // unique id
+  bool            hidden_; // hidden
 };
 
 #endif

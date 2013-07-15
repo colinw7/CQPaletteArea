@@ -11,7 +11,8 @@ enum { EXTRA_FLOAT_HEIGHT = 8 };
 CQDockArea::
 CQDockArea(QMainWindow *mainWindow) :
  QDockWidget(), mainWindow_(mainWindow), dragResize_(false), resizeTimeout_(10),
- resizeTimer_(0), ignoreSize_(false), oldMinSize_(), oldMaxSize_()
+ resizeTimer_(0), ignoreSize_(false), dockWidth_(100), dockHeight_(100),
+ oldMinSize_(), oldMaxSize_(), fixed_(false)
 {
   setObjectName("dockArea");
 
@@ -44,7 +45,7 @@ updateWidgetTitle()
 
 void
 CQDockArea::
-setDockWidth(int width)
+setDockWidth(int width, bool fixed)
 {
   // try drag (no animate)
   if (dragResize())
@@ -54,11 +55,20 @@ setDockWidth(int width)
 
   //------
 
+  if      (! fixed_ && fixed) // not fixed to fixed save height
+    dockWidth_ = this->width();
+  else if (! fixed)
+    dockWidth_ = width;
+
+  //------
+
   // set palette width by setting min or max width (which makes it fixed sized)
   // and use timer to reset to min/max values after main window has finished its
   // layout processing (which would otherwise has reset this width)
-  oldMinSize_ = this->minimumSize();
-  oldMaxSize_ = this->maximumSize();
+  if (! fixed_) {
+    oldMinSize_ = this->minimumSize();
+    oldMaxSize_ = this->maximumSize();
+  }
 
   if (this->isFloating())
     width += EXTRA_FLOAT_WIDTH;
@@ -68,19 +78,27 @@ setDockWidth(int width)
     return;
   }
 
-  if (this->width() < width)
+  if (! fixed) {
+    if (this->width() < width)
+      this->setMinimumWidth(width);
+    else
+      this->setMaximumWidth(width);
+
+    (void) setIgnoreSize(oldIgnoreSize);
+
+    resizeTimer_->start(resizeTimeOut());
+  }
+  else {
     this->setMinimumWidth(width);
-  else
     this->setMaximumWidth(width);
 
-  (void) setIgnoreSize(oldIgnoreSize);
-
-  resizeTimer_->start(resizeTimeOut());
+    fixed_ = true;
+  }
 }
 
 void
 CQDockArea::
-setDockHeight(int height)
+setDockHeight(int height, bool fixed)
 {
   // try drag (no animate)
   if (dragResize())
@@ -90,11 +108,20 @@ setDockHeight(int height)
 
   //------
 
+  if      (! fixed_ && fixed) // not fixed to fixed save height
+    dockHeight_ = this->height();
+  else if (! fixed)
+    dockHeight_ = height;
+
+  //------
+
   // set palette height by setting min or max height (which makes it fixed sized)
   // and use timer to reset to min/max values after main window has finished its
   // layout processing (which would otherwise has reset this height)
-  oldMinSize_ = this->minimumSize();
-  oldMaxSize_ = this->maximumSize();
+  if (! fixed_) {
+    oldMinSize_ = this->minimumSize();
+    oldMaxSize_ = this->maximumSize();
+  }
 
   if (this->isFloating())
     height += EXTRA_FLOAT_HEIGHT;
@@ -104,12 +131,22 @@ setDockHeight(int height)
     return;
   }
 
-  if (this->height() < height)
+  if (! fixed) {
+    if (this->height() < height)
+      this->setMinimumHeight(height);
+    else
+      this->setMaximumHeight(height);
+
+    (void) setIgnoreSize(oldIgnoreSize);
+
+    resizeTimer_->start(resizeTimeOut());
+  }
+  else {
     this->setMinimumHeight(height);
-  else
     this->setMaximumHeight(height);
 
-  resizeTimer_->start(resizeTimeOut());
+    fixed_ = true;
+  }
 }
 
 void
@@ -119,11 +156,7 @@ resetMinMaxSizes()
   this->setMinimumSize(oldMinSize_);
   this->setMaximumSize(oldMaxSize_);
 
-  //resetWidgetMinMaxWidth (this);
-  //resetWidgetMinMaxHeight(this);
-
-  //resetWidgetMinMaxWidth (this->widget());
-  //resetWidgetMinMaxHeight(this->widget());
+  fixed_ = false;
 }
 
 //------

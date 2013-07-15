@@ -8,6 +8,7 @@
 #include <map>
 
 class CQPaletteArea;
+class CQPaletteAreaTitle;
 class CQPaletteWindow;
 class CQPaletteWindowTitle;
 class CQPaletteWindowTitleButton;
@@ -41,6 +42,10 @@ class CQPaletteAreaMgr : public QObject {
   // remove page from area
   void removePage(CQPaletteAreaPage *page);
 
+  void showExpandedPage(CQPaletteAreaPage *page);
+
+  void hidePage(CQPaletteAreaPage *page);
+
  private:
   // add window to area
   CQPaletteWindow *addWindow(Qt::DockWidgetArea dockArea);
@@ -49,7 +54,9 @@ class CQPaletteAreaMgr : public QObject {
   void removeWindow(CQPaletteWindow *window);
 
   // get area at point
-  CQPaletteArea *getAreaAt(const QPoint &pos) const;
+  CQPaletteArea *getAreaAt(const QPoint &pos, Qt::DockWidgetAreas allowedAreas) const;
+
+  void swapAreas(CQPaletteArea *area1, CQPaletteArea *area2);
 
   // highlight area (with rubberband)
   void highlightArea(CQPaletteArea *area, const QPoint &p);
@@ -58,6 +65,7 @@ class CQPaletteAreaMgr : public QObject {
   void clearHighlight();
 
  private:
+  friend class CQPaletteArea;
   friend class CQPaletteWindow;
 
   typedef std::map<Qt::DockWidgetArea,CQPaletteArea *> Palettes;
@@ -74,6 +82,11 @@ class CQPaletteAreaMgr : public QObject {
 class CQPaletteArea : public CQDockArea {
   Q_OBJECT
 
+  Q_PROPERTY(Qt::DockWidgetArea dockArea READ dockArea)
+
+ private:
+  typedef std::vector<CQPaletteAreaPage*> Pages;
+
  public:
   // create in specified dock area
   CQPaletteArea(CQPaletteAreaMgr *mgr, Qt::DockWidgetArea dockArea);
@@ -84,6 +97,13 @@ class CQPaletteArea : public CQDockArea {
   // get area
   Qt::DockWidgetArea dockArea() const { return dockArea_; }
 
+  // get splitter
+  QSplitter *splitter() const { return splitter_; }
+
+  bool isExpanded() const { return expanded_; }
+
+  bool isPinned() const { return pinned_; }
+
   // get first child window
   CQPaletteWindow *getWindow(int i=0);
 
@@ -93,7 +113,16 @@ class CQPaletteArea : public CQDockArea {
   // size hint
   QSize sizeHint() const;
 
+ public slots:
+  void expandSlot();
+  void collapseSlot();
+
+  void pinSlot();
+  void unpinSlot();
+
  private:
+  friend class CQPaletteAreaTitle;
+
   // add child window
   void addWindow(CQPaletteWindow *window);
 
@@ -102,6 +131,30 @@ class CQPaletteArea : public CQDockArea {
 
   // remove child window
   void removeWindow(CQPaletteWindow *window);
+
+  void updateDockArea();
+
+  void updateSplitterSizes();
+
+  Pages getPages() const;
+
+  // is floating
+  bool isFloating() const { return floating_; }
+
+  // set floating
+  void setFloating(bool floating, const QPoint &pos=QPoint());
+
+  // cancel floating
+  void cancelFloating();
+
+  // animate drop at point
+  void animateDrop(const QPoint &p);
+
+  // execute drop at point
+  void execDrop(const QPoint &p);
+
+  // clear drop animation
+  void clearDrop();
 
   // get highlight rectangle
   QRect getHighlightRect() const;
@@ -116,15 +169,23 @@ class CQPaletteArea : public CQDockArea {
   void updateSize();
 
  private:
+  void setDockArea(Qt::DockWidgetArea dockArea) { dockArea_ = dockArea; }
+
+ private:
   friend class CQPaletteAreaMgr;
   friend class CQPaletteWindow;
 
   typedef std::vector<CQPaletteWindow *> Windows;
 
-  CQPaletteAreaMgr   *mgr_;      // parent manager
-  Qt::DockWidgetArea  dockArea_; // dock area
-  QSplitter          *splitter_; // splitter widget
-  Windows             windows_;  // child windows
+  CQPaletteAreaMgr    *mgr_;          // parent manager
+  CQPaletteAreaTitle  *title_;        // title bar
+  Qt::DockWidgetArea   dockArea_;     // dock area
+  bool                 expanded_;     // expanded
+  bool                 pinned_;       // pinned
+  QSplitter           *splitter_;     // splitter widget
+  Windows              windows_;      // child windows
+  bool                 floating_;     // floating
+  Qt::DockWidgetAreas  allowedAreas_; // allowed areas
 };
 
 //------
@@ -134,6 +195,9 @@ class CQPaletteArea : public CQDockArea {
 // area for the page widgets
 class CQPaletteWindow : public QWidget {
   Q_OBJECT
+
+ private:
+  typedef std::vector<CQPaletteAreaPage*> Pages;
 
  public:
   // create window
@@ -148,8 +212,24 @@ class CQPaletteWindow : public QWidget {
   // add page
   void addPage(CQPaletteAreaPage *page);
 
+  // add page at index
+  void insertPage(int ind, CQPaletteAreaPage *page);
+
   // remove page
   void removePage(CQPaletteAreaPage *page);
+
+  void showPage(CQPaletteAreaPage *page);
+
+  void hidePage(CQPaletteAreaPage *page);
+
+  void setCurrentPage(CQPaletteAreaPage *page);
+
+  int dockWidth () const;
+  int dockHeight() const;
+
+  void expand();
+
+  void collapse();
 
   // get title
   QString getTitle() const;
@@ -168,14 +248,23 @@ class CQPaletteWindow : public QWidget {
   friend class CQPaletteArea;
   friend class CQPaletteWindowTitle;
 
+  void updateLayout();
+
+  void updateDockArea();
+
   // set parent area
   void setArea(CQPaletteArea *area);
+
+  Pages getPages() const;
 
   // is floating
   bool isFloating() const { return floating_; }
 
   // set floating
   void setFloating(bool floating, const QPoint &pos=QPoint());
+
+  // cancel floating
+  void cancelFloating();
 
   // animate drop at point
   void animateDrop(const QPoint &p);
@@ -190,18 +279,87 @@ class CQPaletteWindow : public QWidget {
   void closeSlot();
 
  private:
-  CQPaletteAreaMgr     *mgr_;      // parent manager
-  CQPaletteArea        *area_;     // current area
-  CQPaletteWindowTitle *title_;    // title bar
-  CQPaletteGroup       *group_;    // palette group
-  QWidget              *parent_;   // parent widget (before float)
-  bool                  floating_; // is floating
+  CQPaletteAreaMgr     *mgr_;          // parent manager
+  CQPaletteArea        *area_;         // current area
+  CQPaletteWindowTitle *title_;        // title bar
+  CQPaletteGroup       *group_;        // palette group
+  CQPaletteWindow      *newWindow_;    // window for other tabs
+  QWidget              *parent_;       // parent widget (before float)
+  int                   parentPos_;    // parent splitter index
+  bool                  floating_;     // is floating
+  Qt::DockWidgetAreas   allowedAreas_; // allowed areas
+};
+
+//------
+
+// title bar for palette
+class CQPaletteAreaTitle : public CQTitleBar {
+  Q_OBJECT
+
+ public:
+  CQPaletteAreaTitle(CQPaletteArea *area);
+
+ private:
+  friend class CQPaletteArea;
+
+  QString title() const;
+
+  QIcon icon() const;
+
+  void updateDockArea();
+
+  void contextMenuEvent(QContextMenuEvent *e);
+
+  // handle mouse events
+  void mousePressEvent  (QMouseEvent *e);
+  void mouseMoveEvent   (QMouseEvent *e);
+  void mouseReleaseEvent(QMouseEvent *e);
+
+  // handle key events
+  void keyPressEvent(QKeyEvent *e);
+
+  // handle hover events
+  bool event(QEvent *e);
+
+ private:
+  void updateState();
+
+ private slots:
+  void pinSlot();
+  void expandSlot();
+
+ private:
+  // mouse state
+  struct MouseState {
+    bool   pressed;
+    bool   moving;
+    bool   escapePress;
+    QPoint pressPos;
+
+    MouseState(){
+      reset();
+    }
+
+    void reset() {
+      pressed     = false;
+      moving      = false;
+      escapePress = false;
+    }
+  };
+
+  CQPaletteArea    *area_;         // parent area
+  MouseState        mouseState_;   // mouse state
+  CQTitleBarButton *pinButton_;    // pin button
+  CQTitleBarButton *expandButton_; // expand button
+  QMenu            *contextMenu_;  // context menu
 };
 
 //------
 
 // title bar for container window
 class CQPaletteWindowTitle : public CQTitleBar {
+  Q_OBJECT
+
  public:
   CQPaletteWindowTitle(CQPaletteWindow *window);
 
@@ -213,6 +371,8 @@ class CQPaletteWindowTitle : public CQTitleBar {
   QIcon icon() const;
 
   void updateDockArea();
+
+  void contextMenuEvent(QContextMenuEvent *e);
 
   // handle mouse events
   void mousePressEvent  (QMouseEvent *e);
@@ -239,6 +399,7 @@ class CQPaletteWindowTitle : public CQTitleBar {
 
     void reset() {
       pressed     = false;
+      moving      = false;
       escapePress = false;
     }
   };
@@ -246,6 +407,7 @@ class CQPaletteWindowTitle : public CQTitleBar {
   CQPaletteWindow  *window_;      // parent window
   MouseState        mouseState_;  // mouse state
   CQTitleBarButton *closeButton_; // close button
+  QMenu            *contextMenu_;  // context menu
 };
 
 #endif

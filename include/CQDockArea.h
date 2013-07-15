@@ -21,8 +21,11 @@ class CQDockArea : public QDockWidget {
 
   void setWidget(QWidget *w);
 
-  void setDockWidth (int width );
-  void setDockHeight(int height);
+  void setDockWidth (int width , bool fixed=false);
+  void setDockHeight(int height, bool fixed=false);
+
+  int dockWidth () const { return dockWidth_ ; }
+  int dockHeight() const { return dockHeight_; }
 
  private slots:
   void resetMinMaxSizes();
@@ -48,8 +51,11 @@ class CQDockArea : public QDockWidget {
   int          resizeTimeout_;
   QTimer      *resizeTimer_;
   bool         ignoreSize_;
+  int          dockWidth_;
+  int          dockHeight_;
   QSize        oldMinSize_;
   QSize        oldMaxSize_;
+  bool         fixed_;
 };
 
 #endif
