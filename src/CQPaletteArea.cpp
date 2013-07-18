@@ -1,5 +1,6 @@
 #include <CQPaletteArea.h>
 #include <CQPaletteGroup.h>
+#include <CQWidgetResizer.h>
 
 #include <QApplication>
 #include <QMainWindow>
@@ -19,7 +20,11 @@
 #include <unpin.xpm>
 
 namespace Constants {
-  int splitter_tol = 8;
+  int             splitter_tol  = 8;
+  Qt::WindowFlags normalFlags   = Qt::Widget;
+  Qt::WindowFlags floatingFlags = Qt::Tool | Qt::FramelessWindowHint |
+                                  Qt::X11BypassWindowManagerHint;
+  Qt::WindowFlags detachedFlags = Qt::Tool | Qt::FramelessWindowHint;
 };
 
 CQPaletteAreaMgr::
@@ -197,7 +202,7 @@ clearHighlight()
 CQPaletteArea::
 CQPaletteArea(CQPaletteAreaMgr *mgr, Qt::DockWidgetArea dockArea) :
  CQDockArea(mgr->window()), mgr_(mgr), dockArea_(dockArea), expanded_(true),
- pinned_(true), floating_(false)
+ pinned_(true), floating_(false), detached_(false)
 {
   setObjectName("area");
 
@@ -229,6 +234,11 @@ CQPaletteArea(CQPaletteAreaMgr *mgr, Qt::DockWidgetArea dockArea) :
     splitter_->setOrientation(Qt::Horizontal);
 
   setWidget(splitter_);
+
+  resizer_ = new CQWidgetResizer(this);
+
+  resizer_->setMovingEnabled(false);
+  resizer_->setActive(false);
 }
 
 CQPaletteWindow *
@@ -523,9 +533,33 @@ getPages() const
   return pages;
 }
 
+// update detached state
 void
 CQPaletteArea::
-setFloating(bool floating, const QPoint &pos)
+setDetached(bool detached)
+{
+  if (detached_ == detached)
+    return;
+
+  detached_ = detached;
+
+  resizer_->setActive(detached_);
+}
+
+// update floating state
+void
+CQPaletteArea::
+setFloating(bool floating)
+{
+  if (floating_ == floating)
+    return;
+
+  floating_ = floating;
+}
+
+void
+CQPaletteArea::
+setFloated(bool floating, const QPoint &pos)
 {
   if (floating == floating_)
     return;
@@ -533,7 +567,7 @@ setFloating(bool floating, const QPoint &pos)
   if (floating) {
     QPoint lpos = mapFromGlobal(pos);
 
-    setParent(0, Qt::FramelessWindowHint);
+    setParent(0, Constants::floatingFlags);
 
     move(pos - lpos);
 
@@ -550,7 +584,8 @@ setFloating(bool floating, const QPoint &pos)
   else
     mgr_->window()->addDockWidget(dockArea(), this);
 
-  floating_ = floating;
+  setFloating(floating);
+  setDetached(! floating);
 
   show();
 }
@@ -561,7 +596,8 @@ cancelFloating()
 {
   mgr_->window()->addDockWidget(dockArea(), this);
 
-  floating_ = false;
+  setFloating(false);
+  setDetached(false);
 }
 
 void
@@ -578,30 +614,42 @@ animateDrop(const QPoint &p)
 
 void
 CQPaletteArea::
-execDrop(const QPoint &gpos)
+execDrop(const QPoint &gpos, bool floating)
 {
   CQPaletteArea *area = mgr_->getAreaAt(gpos, allowedAreas_);
 
-  if (area && area != this) {
-    if (area->windows_.empty()) {
-      mgr_->swapAreas(this, area);
-    }
-    else {
-      // TODO: keep splitters ...
-      Windows windows = windows_;
+  if (area && (area != this || floating)) {
+    setFloated(false);
 
-      for (Windows::iterator p = windows.begin(); p != windows.end(); ++p) {
-        CQPaletteWindow *window = *p;
+    if (area != this) {
+      if (area->windows_.empty()) {
+        mgr_->swapAreas(this, area);
+      }
+      else {
+        // TODO: keep splitters ...
+        Windows windows = windows_;
 
-        this->removeWindow(window);
+        for (Windows::iterator p = windows.begin(); p != windows.end(); ++p) {
+          CQPaletteWindow *window = *p;
 
-        area->addWindowAtPos(window, gpos);
+          this->removeWindow(window);
+
+          area->addWindowAtPos(window, gpos);
+        }
+
+        mgr_->window()->addDockWidget(area->dockArea(), area);
+
+        hide();
       }
 
-      mgr_->window()->addDockWidget(area->dockArea(), area);
-
-      hide();
     }
+    else {
+      mgr_->window()->addDockWidget(area->dockArea(), area);
+    }
+  }
+  else {
+    setFloating(false);
+    setDetached(true);
   }
 
   clearDrop();
@@ -673,7 +721,7 @@ getHighlightRect() const
 
   QRect rect;
 
-  if (! floating_ && ! windows_.empty()) {
+  if (! isFloating() && ! windows_.empty()) {
     rect = geometry();
 
     rect.adjust(dx, dy, dx, dy);
@@ -765,7 +813,7 @@ sizeHint() const
 
 CQPaletteWindow::
 CQPaletteWindow(CQPaletteArea *area) :
- mgr_(area->mgr()), area_(area), parent_(0), floating_(false)
+ mgr_(area->mgr()), area_(area), parent_(0), floating_(false), detached_(false)
 {
   setObjectName("window");
 
@@ -780,6 +828,11 @@ CQPaletteWindow(CQPaletteArea *area) :
 
   connect(group_, SIGNAL(currentPageChanged(CQPaletteAreaPage *)),
           this, SLOT(pageChangedSlot(CQPaletteAreaPage *)));
+
+  resizer_ = new CQWidgetResizer(this);
+
+  resizer_->setMovingEnabled(false);
+  resizer_->setActive(false);
 }
 
 void
@@ -943,9 +996,33 @@ getPages() const
   return pages;
 }
 
+// update detached state
 void
 CQPaletteWindow::
-setFloating(bool floating, const QPoint &pos)
+setDetached(bool detached)
+{
+  if (detached_ == detached)
+    return;
+
+  detached_ = detached;
+
+  resizer_->setActive(detached_);
+}
+
+// update floating state
+void
+CQPaletteWindow::
+setFloating(bool floating)
+{
+  if (floating_ == floating)
+    return;
+
+  floating_ = floating;
+}
+
+void
+CQPaletteWindow::
+setFloated(bool floating, const QPoint &pos)
 {
   if (floating == floating_)
     return;
@@ -979,14 +1056,15 @@ setFloating(bool floating, const QPoint &pos)
 
     QPoint lpos = mapFromGlobal(pos);
 
-    setParent(0, Qt::FramelessWindowHint);
+    setParent(0, Constants::floatingFlags);
 
     move(pos - lpos);
   }
   else
-    setParent(parent_);
+    setParent(parent_, Constants::normalFlags);
 
-  floating_ = floating;
+  setFloating(floating);
+  setDetached(false);
 
   show();
 }
@@ -1010,6 +1088,9 @@ cancelFloating()
 
     this->deleteLater();
   }
+
+  setFloating(false);
+  setDetached(false);
 }
 
 void
@@ -1026,16 +1107,26 @@ animateDrop(const QPoint &p)
 
 void
 CQPaletteWindow::
-execDrop(const QPoint &gpos)
+execDrop(const QPoint &gpos, bool floating)
 {
   CQPaletteArea *area = mgr_->getAreaAt(gpos, allowedAreas_);
 
   if (area) {
+    setFloated(false);
+
     area_->removeWindow(this);
 
     area->addWindowAtPos(this, gpos);
 
     mgr_->window()->addDockWidget(area->dockArea(), area);
+  }
+  else {
+    setFloating(false);
+    setDetached(true);
+
+    setParent(0, Constants::detachedFlags);
+
+    show();
   }
 
   clearDrop();
@@ -1221,6 +1312,7 @@ mousePressEvent(QMouseEvent *e)
 
   mouseState_.pressed  = true;
   mouseState_.pressPos = e->globalPos();
+  mouseState_.floating = area_->isFloating();
 
   setFocusPolicy(Qt::StrongFocus);
 }
@@ -1238,7 +1330,7 @@ mouseMoveEvent(QMouseEvent *e)
   mouseState_.moving = true;
 
   if (! area_->isFloating())
-    area_->setFloating(true, e->globalPos());
+    area_->setFloated(true, e->globalPos());
 
   int dx = e->globalPos().x() - mouseState_.pressPos.x();
   int dy = e->globalPos().y() - mouseState_.pressPos.y();
@@ -1257,9 +1349,7 @@ mouseReleaseEvent(QMouseEvent *e)
   if (! mouseState_.moving || mouseState_.escapePress)
     return;
 
-  area_->setFloating(false);
-
-  area_->execDrop(e->globalPos());
+  area_->execDrop(e->globalPos(), mouseState_.floating);
 
   mouseState_.reset();
 
@@ -1368,6 +1458,7 @@ mousePressEvent(QMouseEvent *e)
 
   mouseState_.pressed  = true;
   mouseState_.pressPos = e->globalPos();
+  mouseState_.floating = window_->area()->isFloating();
 
   setFocusPolicy(Qt::StrongFocus);
 }
@@ -1385,7 +1476,7 @@ mouseMoveEvent(QMouseEvent *e)
   mouseState_.moving = true;
 
   if (! window_->isFloating())
-    window_->setFloating(true, e->globalPos());
+    window_->setFloated(true, e->globalPos());
 
   int dx = e->globalPos().x() - mouseState_.pressPos.x();
   int dy = e->globalPos().y() - mouseState_.pressPos.y();
@@ -1404,9 +1495,7 @@ mouseReleaseEvent(QMouseEvent *e)
   if (! mouseState_.moving || mouseState_.escapePress)
     return;
 
-  window_->setFloating(false);
-
-  window_->execDrop(e->globalPos());
+  window_->execDrop(e->globalPos(), mouseState_.floating);
 
   mouseState_.reset();
 

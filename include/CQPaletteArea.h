@@ -15,6 +15,7 @@ class CQPaletteWindowTitleButton;
 
 class CQPaletteGroup;
 class CQPaletteAreaPage;
+class CQWidgetResizer;
 
 class QScrollArea;
 class QSplitter;
@@ -122,6 +123,7 @@ class CQPaletteArea : public CQDockArea {
 
  private:
   friend class CQPaletteAreaTitle;
+  friend class CQPaletteWindowTitle;
 
   // add child window
   void addWindow(CQPaletteWindow *window);
@@ -140,10 +142,16 @@ class CQPaletteArea : public CQDockArea {
 
   // is floating
   bool isFloating() const { return floating_; }
-
   // set floating
-  void setFloating(bool floating, const QPoint &pos=QPoint());
+  void setFloating(bool floating);
 
+  // is detached
+  bool isDetached() const { return detached_; }
+  // set detached
+  void setDetached(bool detached);
+
+  // set floated
+  void setFloated(bool floating, const QPoint &pos=QPoint());
   // cancel floating
   void cancelFloating();
 
@@ -151,7 +159,7 @@ class CQPaletteArea : public CQDockArea {
   void animateDrop(const QPoint &p);
 
   // execute drop at point
-  void execDrop(const QPoint &p);
+  void execDrop(const QPoint &p, bool floating);
 
   // clear drop animation
   void clearDrop();
@@ -183,8 +191,10 @@ class CQPaletteArea : public CQDockArea {
   bool                 expanded_;     // expanded
   bool                 pinned_;       // pinned
   QSplitter           *splitter_;     // splitter widget
+  CQWidgetResizer     *resizer_;      // resizer
   Windows              windows_;      // child windows
-  bool                 floating_;     // floating
+  bool                 floating_;     // is floating
+  bool                 detached_;     // is detached
   Qt::DockWidgetAreas  allowedAreas_; // allowed areas
 };
 
@@ -259,9 +269,16 @@ class CQPaletteWindow : public QWidget {
 
   // is floating
   bool isFloating() const { return floating_; }
-
   // set floating
-  void setFloating(bool floating, const QPoint &pos=QPoint());
+  void setFloating(bool floating);
+
+  // is detached
+  bool isDetached() const { return detached_; }
+  // set detached
+  void setDetached(bool detached);
+
+  // set floated
+  void setFloated(bool floating, const QPoint &pos=QPoint());
 
   // cancel floating
   void cancelFloating();
@@ -270,7 +287,7 @@ class CQPaletteWindow : public QWidget {
   void animateDrop(const QPoint &p);
 
   // execute drop at point
-  void execDrop(const QPoint &p);
+  void execDrop(const QPoint &p, bool floating);
 
   // clear drop animation
   void clearDrop();
@@ -283,10 +300,12 @@ class CQPaletteWindow : public QWidget {
   CQPaletteArea        *area_;         // current area
   CQPaletteWindowTitle *title_;        // title bar
   CQPaletteGroup       *group_;        // palette group
+  CQWidgetResizer      *resizer_;      // resizer
   CQPaletteWindow      *newWindow_;    // window for other tabs
   QWidget              *parent_;       // parent widget (before float)
   int                   parentPos_;    // parent splitter index
   bool                  floating_;     // is floating
+  bool                  detached_;     // is detached
   Qt::DockWidgetAreas   allowedAreas_; // allowed areas
 };
 
@@ -335,6 +354,7 @@ class CQPaletteAreaTitle : public CQTitleBar {
     bool   moving;
     bool   escapePress;
     QPoint pressPos;
+    bool   floating;
 
     MouseState(){
       reset();
@@ -344,6 +364,7 @@ class CQPaletteAreaTitle : public CQTitleBar {
       pressed     = false;
       moving      = false;
       escapePress = false;
+      floating    = false;
     }
   };
 
@@ -392,6 +413,7 @@ class CQPaletteWindowTitle : public CQTitleBar {
     bool   moving;
     bool   escapePress;
     QPoint pressPos;
+    bool   floating;
 
     MouseState(){
       reset();
@@ -401,6 +423,7 @@ class CQPaletteWindowTitle : public CQTitleBar {
       pressed     = false;
       moving      = false;
       escapePress = false;
+      floating    = false;
     }
   };
 
