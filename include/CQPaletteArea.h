@@ -12,14 +12,16 @@ class CQPaletteAreaTitle;
 class CQPaletteWindow;
 class CQPaletteWindowTitle;
 class CQPaletteWindowTitleButton;
+class CQPalettePreview;
 
 class CQPaletteGroup;
 class CQPaletteAreaPage;
+
 class CQWidgetResizer;
+class CQRubberBand;
 
 class QScrollArea;
 class QSplitter;
-class QRubberBand;
 
 // palette area manager creates palette areas on all four sides of the main
 // window and controls palette like children which can be moved between each
@@ -73,7 +75,7 @@ class CQPaletteAreaMgr : public QObject {
 
   QMainWindow   *window_;     // parent main window
   Palettes       palettes_;   // list of palettes (one per area)
-  QRubberBand   *rubberBand_; // rubber band
+  CQRubberBand  *rubberBand_; // rubber band
 };
 
 //------
@@ -92,11 +94,11 @@ class CQPaletteArea : public CQDockArea {
   // create in specified dock area
   CQPaletteArea(CQPaletteAreaMgr *mgr, Qt::DockWidgetArea dockArea);
 
+  // destroy area
+ ~CQPaletteArea();
+
   // get manager
   CQPaletteAreaMgr *mgr() const { return mgr_; }
-
-  // get area
-  Qt::DockWidgetArea dockArea() const { return dockArea_; }
 
   // get splitter
   QSplitter *splitter() const { return splitter_; }
@@ -121,9 +123,28 @@ class CQPaletteArea : public CQDockArea {
   void pinSlot();
   void unpinSlot();
 
+  void attachSlot();
+  void detachSlot();
+
+  //! called when Qt changes dock location
+  void updateDockLocation(Qt::DockWidgetArea area);
+
+  //! called when Qt changes floating state
+  void updateFloating(bool floating);
+
+  //! called when Qt changes visibility
+  void updateVisibility(bool visible);
+
  private:
   friend class CQPaletteAreaTitle;
   friend class CQPaletteWindowTitle;
+  friend class CQPalettePreview;
+
+  // update preview state
+  void updatePreviewState();
+
+  // update preview widgets and rects
+  void updatePreview();
 
   // add child window
   void addWindow(CQPaletteWindow *window);
@@ -176,8 +197,8 @@ class CQPaletteArea : public CQDockArea {
   // update size
   void updateSize();
 
- private:
-  void setDockArea(Qt::DockWidgetArea dockArea) { dockArea_ = dockArea; }
+  // handle resize
+  void resizeEvent(QResizeEvent *);
 
  private:
   friend class CQPaletteAreaMgr;
@@ -185,17 +206,17 @@ class CQPaletteArea : public CQDockArea {
 
   typedef std::vector<CQPaletteWindow *> Windows;
 
-  CQPaletteAreaMgr    *mgr_;          // parent manager
-  CQPaletteAreaTitle  *title_;        // title bar
-  Qt::DockWidgetArea   dockArea_;     // dock area
-  bool                 expanded_;     // expanded
-  bool                 pinned_;       // pinned
-  QSplitter           *splitter_;     // splitter widget
-  CQWidgetResizer     *resizer_;      // resizer
-  Windows              windows_;      // child windows
-  bool                 floating_;     // is floating
-  bool                 detached_;     // is detached
-  Qt::DockWidgetAreas  allowedAreas_; // allowed areas
+  CQPaletteAreaMgr    *mgr_;            // parent manager
+  CQPaletteAreaTitle  *title_;          // title bar
+  bool                 expanded_;       // expanded
+  bool                 pinned_;         // pinned
+  QSplitter           *splitter_;       // splitter widget
+  CQWidgetResizer     *resizer_;        // resizer
+  Windows              windows_;        // child windows
+  bool                 floating_;       // is floating
+  bool                 detached_;       // is detached
+  Qt::DockWidgetAreas  allowedAreas_;   // allowed areas
+  CQPalettePreview    *previewHandler_; // preview (unpinned) handler
 };
 
 //------
@@ -231,6 +252,8 @@ class CQPaletteWindow : public QWidget {
   void showPage(CQPaletteAreaPage *page);
 
   void hidePage(CQPaletteAreaPage *page);
+
+  CQPaletteAreaPage *currentPage() const;
 
   void setCurrentPage(CQPaletteAreaPage *page);
 
@@ -344,6 +367,7 @@ class CQPaletteAreaTitle : public CQTitleBar {
   void updateState();
 
  private slots:
+  void attachSlot();
   void pinSlot();
   void expandSlot();
 

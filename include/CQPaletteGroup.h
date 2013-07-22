@@ -1,7 +1,8 @@
 #ifndef CQPaletteGroup_H
 #define CQPaletteGroup_H
 
-#include <QTabBar>
+#include <CQTabBar.h>
+
 #include <QStackedWidget>
 #include <QIcon>
 #include <map>
@@ -63,6 +64,9 @@ class CQPaletteGroup : public QWidget {
  private slots:
   void setTabIndex(int ind);
 
+  void pressTabIndex(int ind);
+
+
  private:
   void updateLayout();
 
@@ -82,7 +86,7 @@ class CQPaletteGroup : public QWidget {
 //------
 
 // tabbar
-class CQPaletteGroupTabBar : public QTabBar {
+class CQPaletteGroupTabBar : public CQTabBar {
   Q_OBJECT
 
  public:

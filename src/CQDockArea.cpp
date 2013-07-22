@@ -8,10 +8,11 @@
 enum { EXTRA_FLOAT_WIDTH  = 8 };
 enum { EXTRA_FLOAT_HEIGHT = 8 };
 
+// create dock area
 CQDockArea::
 CQDockArea(QMainWindow *mainWindow) :
- QDockWidget(), mainWindow_(mainWindow), dragResize_(false), resizeTimeout_(10),
- resizeTimer_(0), ignoreSize_(false), dockWidth_(100), dockHeight_(100),
+ QDockWidget(), mainWindow_(mainWindow), dockArea_(Qt::RightDockWidgetArea), dragResize_(false),
+ resizeTimeout_(10), resizeTimer_(0), ignoreSize_(false), dockWidth_(100), dockHeight_(100),
  oldMinSize_(), oldMaxSize_(), fixed_(false)
 {
   setObjectName("dockArea");
@@ -26,6 +27,7 @@ CQDockArea(QMainWindow *mainWindow) :
   connect(resizeTimer_, SIGNAL(timeout()), this, SLOT(resetMinMaxSizes()));
 }
 
+// set dock area widget
 void
 CQDockArea::
 setWidget(QWidget *w)
@@ -35,6 +37,7 @@ setWidget(QWidget *w)
   updateWidgetTitle();
 }
 
+// set title
 void
 CQDockArea::
 updateWidgetTitle()
@@ -43,6 +46,7 @@ updateWidgetTitle()
   setWindowIcon (widget()->windowIcon ());
 }
 
+// set dock width
 void
 CQDockArea::
 setDockWidth(int width, bool fixed)
@@ -51,11 +55,18 @@ setDockWidth(int width, bool fixed)
   if (dragResize())
     dragToDockWidth(width);
 
+  // move so tab bar stays in a constant position
+  if (isFloating() && dockArea() == Qt::RightDockWidgetArea) {
+    int dx = this->width() - (width + EXTRA_FLOAT_WIDTH);
+
+    if (dx) move(this->pos() + QPoint(dx, 0));
+  }
+
   bool oldIgnoreSize = setIgnoreSize(true);
 
   //------
 
-  if      (! fixed_ && fixed) // not fixed to fixed save height
+  if      (! fixed_ && fixed) // not fixed to fixed -> save height
     dockWidth_ = this->width();
   else if (! fixed)
     dockWidth_ = width;
@@ -96,6 +107,7 @@ setDockWidth(int width, bool fixed)
   }
 }
 
+// set dock height
 void
 CQDockArea::
 setDockHeight(int height, bool fixed)
@@ -103,6 +115,13 @@ setDockHeight(int height, bool fixed)
   // try drag (no animate)
   if (dragResize())
     dragToDockHeight(height);
+
+  // move so tab bar stays in a constant position
+  if (isFloating() && dockArea() == Qt::BottomDockWidgetArea) {
+    int dy = this->height() - (height + EXTRA_FLOAT_HEIGHT);
+
+    if (dy) move(this->pos() + QPoint(0, dy));
+  }
 
   bool oldIgnoreSize = setIgnoreSize(true);
 

@@ -21,6 +21,10 @@ INCLUDEPATH += \
 ../../CQTitleBar/include \
 .
 
+PRE_TARGETDEPS = \
+../lib/libCQPaletteArea.a \
+../../CQTitleBar/lib/libCQTitleBar.a
+
 unix:LIBS += \
 -L../lib -L../../CQTitleBar/lib \
 -lCQPaletteArea -lCQTitleBar

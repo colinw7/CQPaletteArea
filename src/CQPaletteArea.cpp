@@ -1,6 +1,9 @@
 #include <CQPaletteArea.h>
 #include <CQPaletteGroup.h>
+#include <CQPalettePreview.h>
+
 #include <CQWidgetResizer.h>
+#include <CQRubberBand.h>
 
 #include <QApplication>
 #include <QMainWindow>
@@ -11,7 +14,6 @@
 #include <QStyleOption>
 #include <QMouseEvent>
 #include <QKeyEvent>
-#include <QRubberBand>
 #include <QMenu>
 #include <cassert>
 #include <iostream>
@@ -52,7 +54,7 @@ CQPaletteAreaMgr(QMainWindow *window) :
     area->hide();
   }
 
-  rubberBand_ = new QRubberBand(QRubberBand::Rectangle);
+  rubberBand_ = new CQRubberBand;
 
   rubberBand_->hide();
 }
@@ -201,10 +203,12 @@ clearHighlight()
 
 CQPaletteArea::
 CQPaletteArea(CQPaletteAreaMgr *mgr, Qt::DockWidgetArea dockArea) :
- CQDockArea(mgr->window()), mgr_(mgr), dockArea_(dockArea), expanded_(true),
+ CQDockArea(mgr->window()), mgr_(mgr), expanded_(true),
  pinned_(true), floating_(false), detached_(false)
 {
   setObjectName("area");
+
+  setDockArea(dockArea);
 
   // remove title bar and lock in place
   title_ = new CQPaletteAreaTitle(this);
@@ -239,6 +243,22 @@ CQPaletteArea(CQPaletteAreaMgr *mgr, Qt::DockWidgetArea dockArea) :
 
   resizer_->setMovingEnabled(false);
   resizer_->setActive(false);
+
+  previewHandler_ = new CQPalettePreview;
+
+  connect(previewHandler_, SIGNAL(stopPreview()), this, SLOT(collapseSlot()));
+
+  // attach to signals to monitor when dock area changed, floated and shown/hidden
+  connect(this, SIGNAL(dockLocationChanged(Qt::DockWidgetArea)),
+          this, SLOT(updateDockLocation(Qt::DockWidgetArea)));
+  connect(this, SIGNAL(topLevelChanged(bool)), this, SLOT(updateFloating(bool)));
+  connect(this, SIGNAL(visibilityChanged(bool)), this, SLOT(updateVisibility(bool)));
+}
+
+CQPaletteArea::
+~CQPaletteArea()
+{
+  delete previewHandler_;
 }
 
 CQPaletteWindow *
@@ -431,6 +451,31 @@ updateSplitterSizes()
 
 void
 CQPaletteArea::
+updateDockLocation(Qt::DockWidgetArea area)
+{
+  if (area != dockArea())
+    std::cerr << "CQPaletteArea::updateDockLocation" << std::endl;
+}
+
+void
+CQPaletteArea::
+updateFloating(bool /*floating*/)
+{
+  title_->updateState();
+
+  updatePreviewState();
+}
+
+// called when visibility changes (TODO: needed)
+void
+CQPaletteArea::
+updateVisibility(bool)
+{
+  updatePreviewState();
+}
+
+void
+CQPaletteArea::
 updateDockArea()
 {
   setAllowedAreas(dockArea_);
@@ -469,6 +514,8 @@ expandSlot()
   title_->updateState();
 
   expanded_ = true;
+
+  updatePreviewState();
 }
 
 void
@@ -496,6 +543,8 @@ collapseSlot()
   title_->updateState();
 
   expanded_ = false;
+
+  updatePreviewState();
 }
 
 void
@@ -505,6 +554,8 @@ pinSlot()
   if (pinned_) return;
 
   pinned_ = true;
+
+  updatePreviewState();
 }
 
 void
@@ -514,6 +565,75 @@ unpinSlot()
   if (! pinned_) return;
 
   pinned_ = false;
+
+  updatePreviewState();
+}
+
+void
+CQPaletteArea::
+attachSlot()
+{
+  if (! detached_) return;
+
+  mgr_->window()->addDockWidget(dockArea(), this);
+}
+
+void
+CQPaletteArea::
+detachSlot()
+{
+  if (detached_) return;
+
+  setDetached(true);
+
+  setParent(0, Constants::detachedFlags);
+
+  show();
+}
+
+void
+CQPaletteArea::
+updatePreviewState()
+{
+  previewHandler_->setActive(expanded_ && ! pinned_ && ! isFloating() && ! isDetached());
+
+  updatePreview();
+}
+
+void
+CQPaletteArea::
+updatePreview()
+{
+  // clear existing data
+  previewHandler_->clear();
+
+  // add preview widgets (for auto hide)
+  for (Windows::iterator p = windows_.begin(); p != windows_.end(); ++p) {
+    CQPaletteWindow *window = *p;
+
+    CQPaletteAreaPage *page = window->currentPage();
+
+    if (page)
+      previewHandler_->addWidget(page->widget());
+  }
+
+  previewHandler_->addWidget(this);
+
+  // add rectangle for whole palette and resize area
+  QPoint p = mapToGlobal(rect().topLeft());
+
+  //previewHandler_->addRect(QRect(p.x(), p.y(), width(), height()));
+
+  int resizeSize = 7;
+
+  if      (dockArea() == Qt::LeftDockWidgetArea)
+    previewHandler_->addRect(QRect(p.x() + width() - 1, p.y(), resizeSize, height()));
+  else if (dockArea() == Qt::RightDockWidgetArea)
+    previewHandler_->addRect(QRect(p.x() - resizeSize, p.y(), resizeSize, height()));
+  else if (dockArea() == Qt::BottomDockWidgetArea)
+    previewHandler_->addRect(QRect(p.x(), p.y() - resizeSize, width(), resizeSize));
+  else if (dockArea() == Qt::TopDockWidgetArea)
+    previewHandler_->addRect(QRect(p.x(), p.y() + height() - 1, width(), resizeSize));
 }
 
 CQPaletteArea::Pages
@@ -544,6 +664,10 @@ setDetached(bool detached)
   detached_ = detached;
 
   resizer_->setActive(detached_);
+
+  title_->updateState();
+
+  updatePreviewState();
 }
 
 // update floating state
@@ -555,6 +679,8 @@ setFloating(bool floating)
     return;
 
   floating_ = floating;
+
+  updatePreviewState();
 }
 
 void
@@ -585,7 +711,6 @@ setFloated(bool floating, const QPoint &pos)
     mgr_->window()->addDockWidget(dockArea(), this);
 
   setFloating(floating);
-  setDetached(! floating);
 
   show();
 }
@@ -619,7 +744,8 @@ execDrop(const QPoint &gpos, bool floating)
   CQPaletteArea *area = mgr_->getAreaAt(gpos, allowedAreas_);
 
   if (area && (area != this || floating)) {
-    setFloated(false);
+    setFloated (false);
+    setDetached(false);
 
     if (area != this) {
       if (area->windows_.empty()) {
@@ -641,7 +767,6 @@ execDrop(const QPoint &gpos, bool floating)
 
         hide();
       }
-
     }
     else {
       mgr_->window()->addDockWidget(area->dockArea(), area);
@@ -724,7 +849,8 @@ getHighlightRect() const
   if (! isFloating() && ! windows_.empty()) {
     rect = geometry();
 
-    rect.adjust(dx, dy, dx, dy);
+    if (! isDetached())
+      rect.adjust(dx, dy, dx, dy);
 
     if (dockArea() == Qt::LeftDockWidgetArea || dockArea() == Qt::RightDockWidgetArea) {
       rect.setHeight(crect.height());
@@ -766,6 +892,13 @@ getHighlightRect() const
   }
 
   return rect;
+}
+
+void
+CQPaletteArea::
+resizeEvent(QResizeEvent *)
+{
+  updatePreviewState();
 }
 
 void
@@ -897,6 +1030,13 @@ hidePage(CQPaletteAreaPage *page)
     setVisible(false);
 }
 
+CQPaletteAreaPage *
+CQPaletteWindow::
+currentPage() const
+{
+  return group_->currentPage();
+}
+
 void
 CQPaletteWindow::
 setCurrentPage(CQPaletteAreaPage *page)
@@ -964,7 +1104,7 @@ QString
 CQPaletteWindow::
 getTitle() const
 {
-  CQPaletteAreaPage *page = group_->currentPage();
+  CQPaletteAreaPage *page = currentPage();
 
   return (page ? page->title() : "");
 }
@@ -973,7 +1113,7 @@ QIcon
 CQPaletteWindow::
 getIcon() const
 {
-  CQPaletteAreaPage *page = group_->currentPage();
+  CQPaletteAreaPage *page = currentPage();
 
   return (page ? page->icon() : QIcon());
 }
@@ -1030,7 +1170,7 @@ setFloated(bool floating, const QPoint &pos)
   if (floating) {
     CQPaletteGroup::PageArray pages = getPages();
 
-    CQPaletteAreaPage *currentPage = group_->currentPage();
+    CQPaletteAreaPage *currentPage = this->currentPage();
 
     allowedAreas_ = currentPage->allowedAreas();
 
@@ -1076,7 +1216,7 @@ cancelFloating()
   if (! newWindow_)
     area_->splitter()->insertWidget(parentPos_, this);
   else {
-    CQPaletteAreaPage *currentPage = group_->currentPage();
+    CQPaletteAreaPage *currentPage = this->currentPage();
 
     removePage(currentPage);
 
@@ -1118,7 +1258,8 @@ execDrop(const QPoint &gpos, bool floating)
 
     area->addWindowAtPos(this, gpos);
 
-    mgr_->window()->addDockWidget(area->dockArea(), area);
+    if (! area->isDetached())
+      mgr_->window()->addDockWidget(area->dockArea(), area);
   }
   else {
     setFloating(false);
@@ -1143,7 +1284,7 @@ void
 CQPaletteWindow::
 closeSlot()
 {
-  CQPaletteAreaPage *page = group_->currentPage();
+  CQPaletteAreaPage *page = currentPage();
 
   removePage(page);
 }
@@ -1219,6 +1360,18 @@ icon() const
 
 void
 CQPaletteAreaTitle::
+attachSlot()
+{
+  if (area_->isDetached())
+    area_->attachSlot();
+  else
+    area_->detachSlot();
+
+  updateState();
+}
+
+void
+CQPaletteAreaTitle::
 pinSlot()
 {
   if (area_->isPinned())
@@ -1256,6 +1409,8 @@ updateState()
   else
     pinButton_->setVisible(false);
 
+  pinButton_->setEnabled(! area_->isFloating() && ! area_->isDetached());
+
   if (area_->isExpanded())
     expandButton_->setIcon(style()->standardIcon(QStyle::SP_TitleBarUnshadeButton, 0, this));
   else
@@ -1271,9 +1426,11 @@ contextMenuEvent(QContextMenuEvent *e)
   if (! contextMenu_) {
     contextMenu_ = new QMenu(this);
 
+    QAction *attachAction = contextMenu_->addAction("Attach");
     QAction *pinAction    = contextMenu_->addAction("Pin");
     QAction *expandAction = contextMenu_->addAction("Expand");
 
+    connect(attachAction, SIGNAL(triggered()), this, SLOT(attachSlot()));
     connect(pinAction   , SIGNAL(triggered()), this, SLOT(pinSlot()));
     connect(expandAction, SIGNAL(triggered()), this, SLOT(expandSlot()));
   }
@@ -1285,7 +1442,13 @@ contextMenuEvent(QContextMenuEvent *e)
 
     const QString &text = action->text();
 
-    if      (text == "Pin" || text == "Unpin") {
+    if      (text == "Attach" || text == "Detach") {
+      if (area_->isDetached())
+        action->setText("Attach");
+      else
+        action->setText("Detach");
+    }
+    else if (text == "Pin" || text == "Unpin") {
       if (area_->isPinned())
         action->setText("Unpin");
       else

@@ -15,6 +15,7 @@ CQPaletteGroup(CQPaletteWindow *window) :
   stack_  = new CQPaletteGroupStack (this);
 
   connect(tabbar_, SIGNAL(currentChanged(int)), this, SLOT(setTabIndex(int)));
+  connect(tabbar_, SIGNAL(currentPressed(int)), this, SLOT(pressTabIndex(int)));
 
   updateLayout();
 }
@@ -196,6 +197,16 @@ setTabIndex(int ind)
 
 void
 CQPaletteGroup::
+pressTabIndex(int /*ind*/)
+{
+  if (window_->area()->isExpanded())
+    window_->area()->collapseSlot();
+  else
+    window_->area()->expandSlot();
+}
+
+void
+CQPaletteGroup::
 updateLayout()
 {
   if (! isVisible()) return;
@@ -275,7 +286,7 @@ sizeHint() const
 
 CQPaletteGroupTabBar::
 CQPaletteGroupTabBar(CQPaletteGroup *group) :
- QTabBar(group), group_(group)
+ CQTabBar(group), group_(group)
 {
   setObjectName("tabbar");
 
@@ -292,6 +303,7 @@ updateDockArea()
 {
   Qt::DockWidgetArea dockArea = group_->dockArea();
 
+#if 0
   if      (dockArea == Qt::LeftDockWidgetArea)
     setShape(QTabBar::RoundedWest);
   else if (dockArea == Qt::RightDockWidgetArea)
@@ -300,6 +312,16 @@ updateDockArea()
     setShape(QTabBar::RoundedNorth);
   else if (dockArea == Qt::BottomDockWidgetArea)
     setShape(QTabBar::RoundedSouth);
+#else
+  if      (dockArea == Qt::LeftDockWidgetArea)
+    setPosition(CQTabBar::West);
+  else if (dockArea == Qt::RightDockWidgetArea)
+    setPosition(CQTabBar::East);
+  else if (dockArea == Qt::TopDockWidgetArea)
+    setPosition(CQTabBar::North);
+  else if (dockArea == Qt::BottomDockWidgetArea)
+    setPosition(CQTabBar::South);
+#endif
 }
 
 void
@@ -315,7 +337,7 @@ void
 CQPaletteGroupTabBar::
 insertPage(int ind, CQPaletteAreaPage *page)
 {
-  ind = insertTab(ind, page->icon(), page->title());
+  insertTab(ind, page->icon(), page->title());
 
   setTabData(ind, page->id());
 }
