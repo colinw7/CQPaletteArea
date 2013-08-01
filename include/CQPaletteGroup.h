@@ -147,6 +147,12 @@ class CQPaletteAreaPage : public QObject {
   bool hidden() const { return hidden_; }
   void setHidden(bool hidden) { hidden_ = hidden; }
 
+  bool resizable() const { return resizable_; }
+
+  void setResizable(bool resizable) { resizable_ = resizable; }
+
+  void setFixedSize(const QSize &size) { fixedSize_ = size, setResizable(false); }
+
   virtual QString windowTitle() const { return ""; }
 
   virtual QString title() const { return ""; }
@@ -154,13 +160,18 @@ class CQPaletteAreaPage : public QObject {
 
   virtual Qt::DockWidgetAreas allowedAreas() const { return Qt::AllDockWidgetAreas; }
 
+  void getMinMaxWidth (int &min_w, int &max_w) const;
+  void getMinMaxHeight(int &min_h, int &max_h) const;
+
  private:
   static uint lastId_;
 
-  CQPaletteGroup *group_;  // parent group
-  QWidget        *w_;      // child widget
-  uint            id_;     // unique id
-  bool            hidden_; // hidden
+  CQPaletteGroup *group_;     // parent group
+  QWidget        *w_;         // child widget
+  uint            id_;        // unique id
+  bool            hidden_;    // hidden
+  bool            resizable_; // resizable
+  QSize           fixedSize_; // fixed size
 };
 
 #endif

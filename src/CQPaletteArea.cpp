@@ -4,6 +4,7 @@
 
 #include <CQWidgetResizer.h>
 #include <CQRubberBand.h>
+#include <CQWidgetUtil.h>
 
 #include <QApplication>
 #include <QMainWindow>
@@ -138,6 +139,16 @@ removeWindow(CQPaletteWindow *window)
 
 CQPaletteArea *
 CQPaletteAreaMgr::
+getArea(Qt::DockWidgetArea area) const
+{
+  Palettes::const_iterator p = palettes_.find(area);
+  assert(p != palettes_.end());
+
+  return (*p).second;
+}
+
+CQPaletteArea *
+CQPaletteAreaMgr::
 getAreaAt(const QPoint &pos, Qt::DockWidgetAreas allowedAreas) const
 {
   for (Palettes::const_iterator p = palettes_.begin(); p != palettes_.end(); ++p) {
@@ -219,9 +230,9 @@ CQPaletteArea(CQPaletteAreaMgr *mgr, Qt::DockWidgetArea dockArea) :
 
   setAllowedAreas(dockArea);
 
-  if (dockArea_ == Qt::LeftDockWidgetArea || dockArea_ == Qt::RightDockWidgetArea)
+  if      (isVerticalDockArea())
     setFeatures(0);
-  else
+  else if (isHorizontalDockArea())
     setFeatures(QDockWidget::DockWidgetVerticalTitleBar);
 
   // add to main window
@@ -232,9 +243,9 @@ CQPaletteArea(CQPaletteAreaMgr *mgr, Qt::DockWidgetArea dockArea) :
 
   splitter_->setObjectName("splitter");
 
-  if (dockArea_ == Qt::LeftDockWidgetArea || dockArea_ == Qt::RightDockWidgetArea)
+  if      (isVerticalDockArea())
     splitter_->setOrientation(Qt::Vertical);
-  else
+  else if (isHorizontalDockArea())
     splitter_->setOrientation(Qt::Horizontal);
 
   setWidget(splitter_);
@@ -253,6 +264,8 @@ CQPaletteArea(CQPaletteAreaMgr *mgr, Qt::DockWidgetArea dockArea) :
           this, SLOT(updateDockLocation(Qt::DockWidgetArea)));
   connect(this, SIGNAL(topLevelChanged(bool)), this, SLOT(updateFloating(bool)));
   connect(this, SIGNAL(visibilityChanged(bool)), this, SLOT(updateVisibility(bool)));
+
+  connect(this, SIGNAL(resizeFinished()), this, SLOT(updateSizeConstraints()));
 }
 
 CQPaletteArea::
@@ -313,7 +326,7 @@ addWindowAtPos(CQPaletteWindow *window, const QPoint &gpos)
 
   int n = splitter_->count();
 
-  if (dockArea() == Qt::LeftDockWidgetArea || dockArea() == Qt::RightDockWidgetArea) {
+  if      (isVerticalDockArea()) {
     for (int i = 0; i < n; ++i) {
       QWidget *widget = splitter_->widget(i);
 
@@ -342,7 +355,7 @@ addWindowAtPos(CQPaletteWindow *window, const QPoint &gpos)
       }
     }
   }
-  else {
+  else if (isHorizontalDockArea()) {
     for (int i = 0; i < n; ++i) {
       QWidget *widget = splitter_->widget(i);
 
@@ -423,7 +436,7 @@ updateSplitterSizes()
 
   int n = splitter_->count();
 
-  if (dockArea_ == Qt::LeftDockWidgetArea || dockArea_ == Qt::RightDockWidgetArea) {
+  if      (isVerticalDockArea()) {
     int h = splitter_->height();
 
     for (int i = 0; i < n; ++ i) {
@@ -434,7 +447,7 @@ updateSplitterSizes()
       h -= h1;
     }
   }
-  else {
+  else if (isHorizontalDockArea()) {
     int w = splitter_->width();
 
     for (int i = 0; i < n; ++ i) {
@@ -480,16 +493,16 @@ updateDockArea()
 {
   setAllowedAreas(dockArea_);
 
-  if (dockArea_ == Qt::LeftDockWidgetArea || dockArea_ == Qt::RightDockWidgetArea)
+  if      (isVerticalDockArea())
     setFeatures(0);
-  else
+  else if (isHorizontalDockArea())
     setFeatures(QDockWidget::DockWidgetVerticalTitleBar);
 
   title_->updateDockArea();
 
-  if (dockArea_ == Qt::LeftDockWidgetArea || dockArea_ == Qt::RightDockWidgetArea)
+  if      (isVerticalDockArea())
     splitter_->setOrientation(Qt::Vertical);
-  else
+  else if (isHorizontalDockArea())
     splitter_->setOrientation(Qt::Horizontal);
 
   for (Windows::iterator p = windows_.begin(); p != windows_.end(); ++p) {
@@ -506,14 +519,34 @@ expandSlot()
 {
   if (expanded_) return;
 
-  if (dockArea() == Qt::LeftDockWidgetArea || dockArea() == Qt::RightDockWidgetArea)
-    setDockWidth(dockWidth(), false);
-  else
-    setDockHeight(dockHeight(), false);
+  if      (isVerticalDockArea()) {
+    int min_w, max_w;
 
-  title_->updateState();
+    getDockMinMaxWidth(min_w, max_w);
+
+    bool fixed = (min_w == max_w);
+
+    if (! fixed)
+      setDockWidth(dockWidth(), false);
+    else
+      setDockWidth(min_w, true);
+  }
+  else if (isHorizontalDockArea()) {
+    int min_h, max_h;
+
+    getDockMinMaxHeight(min_h, max_h);
+
+    bool fixed = (min_h == max_h);
+
+    if (! fixed)
+      setDockHeight(dockHeight(), false);
+    else
+      setDockHeight(min_h, true);
+  }
 
   expanded_ = true;
+
+  title_->updateState();
 
   updatePreviewState();
 }
@@ -524,27 +557,34 @@ collapseSlot()
 {
   if (! expanded_) return;
 
+  setCollapsedSize();
+
+  expanded_ = false;
+
+  title_->updateState();
+
+  updatePreviewState();
+}
+
+void
+CQPaletteArea::
+setCollapsedSize()
+{
   int w = 1;
 
   for (Windows::iterator p = windows_.begin(); p != windows_.end(); ++p) {
     CQPaletteWindow *window = *p;
 
-    if (dockArea() == Qt::LeftDockWidgetArea || dockArea() == Qt::RightDockWidgetArea)
+    if      (isVerticalDockArea())
       w = std::max(w, window->dockWidth());
-    else
+    else if (isHorizontalDockArea())
       w = std::max(w, window->dockHeight());
   }
 
-  if (dockArea() == Qt::LeftDockWidgetArea || dockArea() == Qt::RightDockWidgetArea)
+  if      (isVerticalDockArea())
     setDockWidth(w, true);
-  else
+  else if (isHorizontalDockArea())
     setDockHeight(w, true);
-
-  title_->updateState();
-
-  expanded_ = false;
-
-  updatePreviewState();
 }
 
 void
@@ -741,7 +781,7 @@ void
 CQPaletteArea::
 execDrop(const QPoint &gpos, bool floating)
 {
-  CQPaletteArea *area = mgr_->getAreaAt(gpos, allowedAreas_);
+  CQPaletteArea *area = mgr_->getAreaAt(gpos, allowedAreas());
 
   if (area && (area != this || floating)) {
     setFloated (false);
@@ -805,14 +845,14 @@ getHighlightRectAtPos(const QPoint &gpos) const
     int w = std::max(widget->width (), 2*tol);
     int h = std::max(widget->height(), 2*tol);
 
-    if (dockArea() == Qt::LeftDockWidgetArea || dockArea() == Qt::RightDockWidgetArea) {
+    if      (isVerticalDockArea()) {
       int y = widget->mapFromGlobal(gpos).y();
 
       if      (y >    - tol && y <      tol) { rect = QRect(0,   - tol, w,     2*tol); break;; }
       else if (y >  h - tol && y <  h + tol) { rect = QRect(0, h - tol, w,     2*tol); break; }
       else if (y >=     tol && y <= h - tol) { rect = QRect(0,     tol, w, h - 2*tol); break; }
     }
-    else {
+    else if (isHorizontalDockArea()) {
       int x = widget->mapFromGlobal(gpos).x();
 
       if      (x >    - tol && x <      tol) { rect = QRect(  - tol, 0,     2*tol, h); break; }
@@ -852,12 +892,12 @@ getHighlightRect() const
     if (! isDetached())
       rect.adjust(dx, dy, dx, dy);
 
-    if (dockArea() == Qt::LeftDockWidgetArea || dockArea() == Qt::RightDockWidgetArea) {
+    if      (isVerticalDockArea()) {
       rect.setHeight(crect.height());
 
       if (rect.width() < 2*tol) rect.setWidth(2*tol);
     }
-    else {
+    else if (isHorizontalDockArea()) {
       rect.setWidth(crect.height());
 
       if (rect.height() < 2*tol) rect.setHeight(2*tol);
@@ -865,7 +905,7 @@ getHighlightRect() const
   }
   else {
     // left/right are the height of the central widget and to the side of it
-    if (dockArea() == Qt::LeftDockWidgetArea || dockArea() == Qt::RightDockWidgetArea) {
+    if      (isVerticalDockArea()) {
       rect = crect;
 
       if (dockArea() == Qt::LeftDockWidgetArea)
@@ -876,7 +916,7 @@ getHighlightRect() const
       rect.adjust(dx, dy, dx, dy);
     }
     // top/bottom are the width of the main window and to the side of the central widget
-    else {
+    else if (isHorizontalDockArea()) {
       rect = crect;
 
       rect.setX    (wrect.x());
@@ -896,8 +936,36 @@ getHighlightRect() const
 
 void
 CQPaletteArea::
-resizeEvent(QResizeEvent *)
+dockLeft()
 {
+  CQPaletteArea *area = mgr_->getArea(Qt::LeftDockWidgetArea);
+
+  if (area->windows_.empty()) {
+    mgr_->swapAreas(this, area);
+  }
+  else {
+    Windows windows = windows_;
+
+    for (Windows::iterator p = windows.begin(); p != windows.end(); ++p) {
+      CQPaletteWindow *window = *p;
+
+      removeWindow(window);
+
+      area->addWindow(window);
+    }
+
+    mgr_->window()->addDockWidget(area->dockArea(), area);
+
+    hide();
+  }
+}
+
+void
+CQPaletteArea::
+resizeEvent(QResizeEvent *e)
+{
+  CQDockArea::resizeEvent(e);
+
   updatePreviewState();
 }
 
@@ -910,10 +978,122 @@ updateSize()
   else {
     QSize s = sizeHint();
 
-    if (dockArea() == Qt::LeftDockWidgetArea || dockArea() == Qt::RightDockWidgetArea)
+    if      (isVerticalDockArea())
       setDockWidth (s.width ());
-    else
+    else if (isHorizontalDockArea())
       setDockHeight(s.height());
+  }
+}
+
+void
+CQPaletteArea::
+setSizeConstraints()
+{
+  if      (isVerticalDockArea()) {
+    int min_w, max_w;
+
+    getDockMinMaxWidth(min_w, max_w);
+
+    bool fixed = (min_w == max_w);
+
+    if (fixed)
+      setDockWidth(min_w, true);
+    else
+      setDockWidth(dockWidth(), false);
+  }
+  else if (isHorizontalDockArea()) {
+    int min_h, max_h;
+
+    getDockMinMaxHeight(min_h, max_h);
+
+    bool fixed = (min_h == max_h);
+
+    if (fixed)
+      setDockHeight(min_h, true);
+    else
+      setDockHeight(dockHeight(), false);
+  }
+}
+
+void
+CQPaletteArea::
+updateSizeConstraints()
+{
+  if (isFixed()) return;
+
+  assert(isExpanded());
+
+  if      (isVerticalDockArea()) {
+    int min_w, max_w;
+
+    getDockMinMaxWidth(min_w, max_w);
+
+    CQWidgetUtil::setWidgetMinMaxWidth(this, min_w, max_w);
+  }
+  else if (isHorizontalDockArea()) {
+    int min_h, max_h;
+
+    getDockMinMaxHeight(min_h, max_h);
+
+    CQWidgetUtil::setWidgetMinMaxHeight(this, min_h, max_h);
+  }
+}
+
+void
+CQPaletteArea::
+getDockMinMaxWidth(int &min_w, int &max_w) const
+{
+  min_w = 0;
+  max_w = QWIDGETSIZE_MAX;
+
+  for (Windows::const_iterator p = windows_.begin(); p != windows_.end(); ++p) {
+    CQPaletteWindow *window = *p;
+
+    CQPaletteAreaPage *page = window->currentPage();
+    if (! page) continue;
+
+    int min_w1, max_w1;
+
+    page->getMinMaxWidth(min_w1, max_w1);
+
+    if (! page->resizable()) {
+      min_w = min_w1;
+      max_w = max_w1;
+
+      break;
+    }
+
+    min_w = std::max(min_w, min_w1);
+    max_w = std::min(max_w, max_w1);
+  }
+}
+
+void
+CQPaletteArea::
+getDockMinMaxHeight(int &min_h, int &max_h) const
+{
+  min_h = 0;
+  max_h = QWIDGETSIZE_MAX;
+
+  for (Windows::const_iterator p = windows_.begin(); p != windows_.end(); ++p) {
+    CQPaletteWindow *window = *p;
+
+    CQPaletteAreaPage *page = window->currentPage();
+    if (! page) continue;
+
+    int min_h1, max_h1;
+
+    page->getMinMaxHeight(min_h1, max_h1);
+
+    if (! page->resizable()) {
+      min_h = min_h1;
+      max_h = max_h1;
+
+      break;
+    }
+
+    min_h = std::max(min_h, min_h1);
+    max_h = std::min(max_h, max_h1);
   }
 }
 
@@ -929,11 +1109,11 @@ sizeHint() const
 
     QSize s = window->sizeHint();
 
-    if (dockArea() == Qt::LeftDockWidgetArea || dockArea() == Qt::RightDockWidgetArea) {
+    if      (isVerticalDockArea()) {
       w  = std::max(w, s.width());
       h += s.height();
     }
-    else {
+    else if (isHorizontalDockArea()) {
       h  = std::max(h, s.height());
       w += s.width();
     }
@@ -1055,12 +1235,11 @@ updateLayout()
   while ((child = l->takeAt(0)) != 0)
     delete child;
 
-  if (area_->dockArea() == Qt::LeftDockWidgetArea ||
-      area_->dockArea() == Qt::RightDockWidgetArea) {
+  if      (area_->isVerticalDockArea()) {
     l->addWidget(title_, 0, 0);
     l->addWidget(group_, 1, 0);
   }
-  else {
+  else if (area_->isHorizontalDockArea()) {
     l->addWidget(title_, 0, 0);
     l->addWidget(group_, 0, 1);
   }
@@ -1123,6 +1302,9 @@ CQPaletteWindow::
 pageChangedSlot(CQPaletteAreaPage *)
 {
   title_->update();
+
+  if (area_->isExpanded())
+    area_->setSizeConstraints();
 }
 
 CQPaletteWindow::Pages
@@ -1237,7 +1419,7 @@ void
 CQPaletteWindow::
 animateDrop(const QPoint &p)
 {
-  CQPaletteArea *area = mgr_->getAreaAt(p, allowedAreas_);
+  CQPaletteArea *area = mgr_->getAreaAt(p, allowedAreas());
 
   if (area)
     mgr_->highlightArea(area, p);
@@ -1249,7 +1431,7 @@ void
 CQPaletteWindow::
 execDrop(const QPoint &gpos, bool floating)
 {
-  CQPaletteArea *area = mgr_->getAreaAt(gpos, allowedAreas_);
+  CQPaletteArea *area = mgr_->getAreaAt(gpos, allowedAreas());
 
   if (area) {
     setFloated(false);
@@ -1299,12 +1481,11 @@ sizeHint() const
   QSize ts = title_->sizeHint();
   QSize gs = group_->sizeHint();
 
-  if (area_->dockArea() == Qt::LeftDockWidgetArea ||
-      area_->dockArea() == Qt::RightDockWidgetArea) {
+  if      (area_->isVerticalDockArea()) {
     w = std::max(std::max(w, ts.width()), gs.width());
     h = gs.height() + ts.height();
   }
-  else {
+  else if (area_->isHorizontalDockArea()) {
     h = std::max(std::max(h, ts.height()), gs.height());
     w = gs.width() + ts.width();
   }
@@ -1337,10 +1518,9 @@ void
 CQPaletteAreaTitle::
 updateDockArea()
 {
-  if (area_->dockArea() == Qt::LeftDockWidgetArea ||
-      area_->dockArea() == Qt::RightDockWidgetArea)
+  if      (area_->isVerticalDockArea())
     setOrientation(Qt::Horizontal);
-  else
+  else if (area_->isHorizontalDockArea())
     setOrientation(Qt::Vertical);
 }
 
@@ -1396,25 +1576,62 @@ expandSlot()
 
 void
 CQPaletteAreaTitle::
+dockLeftSlot()
+{
+  area_->dockLeft();
+}
+
+void
+CQPaletteAreaTitle::
+dockRightSlot()
+{
+}
+
+void
+CQPaletteAreaTitle::
+dockTopSlot()
+{
+}
+
+void
+CQPaletteAreaTitle::
+dockBottomSlot()
+{
+}
+
+void
+CQPaletteAreaTitle::
 updateState()
 {
   if (area_->isExpanded()) {
     pinButton_->setVisible(true);
 
-    if (area_->isPinned())
+    if (area_->isPinned()) {
       pinButton_->setIcon(QPixmap(unpin_data));
-    else
+
+      pinButton_->setToolTip("Unpin");
+    }
+    else {
       pinButton_->setIcon(QPixmap(pin_data));
+
+      pinButton_->setToolTip("Pin");
+    }
   }
   else
     pinButton_->setVisible(false);
 
   pinButton_->setEnabled(! area_->isFloating() && ! area_->isDetached());
 
-  if (area_->isExpanded())
+  if (area_->isExpanded()) {
     expandButton_->setIcon(style()->standardIcon(QStyle::SP_TitleBarUnshadeButton, 0, this));
-  else
+
+    expandButton_->setToolTip("Collapse");
+  }
+  else {
     expandButton_->setIcon(style()->standardIcon(QStyle::SP_TitleBarShadeButton, 0, this));
+
+    expandButton_->setToolTip("Expand");
+  }
 
   updateLayout();
 }
@@ -1426,6 +1643,18 @@ contextMenuEvent(QContextMenuEvent *e)
   if (! contextMenu_) {
     contextMenu_ = new QMenu(this);
 
+    QMenu *dockMenu = contextMenu_->addMenu("Dock");
+
+    QAction *dockLeftItem   = dockMenu->addAction("Left");
+    QAction *dockRightItem  = dockMenu->addAction("Right");
+    QAction *dockTopItem    = dockMenu->addAction("Top");
+    QAction *dockBottomItem = dockMenu->addAction("Bottom");
+
+    connect(dockLeftItem  , SIGNAL(triggered()), this, SLOT(dockLeftSlot()));
+    connect(dockRightItem , SIGNAL(triggered()), this, SLOT(dockRightSlot()));
+    connect(dockTopItem   , SIGNAL(triggered()), this, SLOT(dockTopSlot()));
+    connect(dockBottomItem, SIGNAL(triggered()), this, SLOT(dockBottomSlot()));
+
     QAction *attachAction = contextMenu_->addAction("Attach");
     QAction *pinAction    = contextMenu_->addAction("Pin");
     QAction *expandAction = contextMenu_->addAction("Expand");
@@ -1435,6 +1664,8 @@ contextMenuEvent(QContextMenuEvent *e)
     connect(expandAction, SIGNAL(triggered()), this, SLOT(expandSlot()));
   }
 
+  //----
+
   QList<QAction *> actions = contextMenu_->actions();
 
   for (int i = 0; i < actions.size(); ++i) {
@@ -1442,7 +1673,31 @@ contextMenuEvent(QContextMenuEvent *e)
 
     const QString &text = action->text();
 
-    if      (text == "Attach" || text == "Detach") {
+    if      (text == "Dock") {
+      QMenu *menu = action->menu();
+
+      QList<QAction *> actions1 = menu->actions();
+
+      for (int j = 0; j < actions.size(); ++j) {
+        QAction *action1 = actions1.at(j);
+
+        const QString &text1 = action1->text();
+
+        if      (text1 == "Left") {
+          action1->setEnabled(area_->dockArea() != Qt::LeftDockWidgetArea);
+        }
+        else if (text1 == "Right") {
+          action1->setEnabled(area_->dockArea() != Qt::RightDockWidgetArea);
+        }
+        else if (text1 == "Top") {
+          action1->setEnabled(area_->dockArea() != Qt::TopDockWidgetArea);
+        }
+        else if (text1 == "Bottom") {
+          action1->setEnabled(area_->dockArea() != Qt::BottomDockWidgetArea);
+        }
+      }
+    }
+    else if (text == "Attach" || text == "Detach") {
       if (area_->isDetached())
         action->setText("Attach");
       else
@@ -1573,10 +1828,9 @@ void
 CQPaletteWindowTitle::
 updateDockArea()
 {
-  if (window_->area()->dockArea() == Qt::LeftDockWidgetArea ||
-      window_->area()->dockArea() == Qt::RightDockWidgetArea)
+  if      (window_->area()->isVerticalDockArea())
     setOrientation(Qt::Horizontal);
-  else
+  else if (window_->area()->isHorizontalDockArea())
     setOrientation(Qt::Vertical);
 }
 

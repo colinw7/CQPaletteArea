@@ -1,19 +1,22 @@
 #include <CQDockArea.h>
+#include <CQWidgetUtil.h>
 
 #include <QApplication>
 #include <QMainWindow>
 #include <QTimer>
 #include <QMouseEvent>
 
+#include <iostream>
+
 enum { EXTRA_FLOAT_WIDTH  = 8 };
 enum { EXTRA_FLOAT_HEIGHT = 8 };
 
 // create dock area
 CQDockArea::
-CQDockArea(QMainWindow *mainWindow) :
- QDockWidget(), mainWindow_(mainWindow), dockArea_(Qt::RightDockWidgetArea), dragResize_(false),
+CQDockArea(QMainWindow *window) :
+ QDockWidget(), window_(window), dockArea_(Qt::RightDockWidgetArea), dragResize_(false),
  resizeTimeout_(10), resizeTimer_(0), ignoreSize_(false), dockWidth_(100), dockHeight_(100),
- oldMinSize_(), oldMaxSize_(), fixed_(false)
+ oldMinSize_(), oldMaxSize_(), fixed_(false), splitterPressed_(false)
 {
   setObjectName("dockArea");
 
@@ -25,6 +28,24 @@ CQDockArea(QMainWindow *mainWindow) :
   resizeTimer_->setSingleShot(true);
 
   connect(resizeTimer_, SIGNAL(timeout()), this, SLOT(resetMinMaxSizes()));
+
+  qApp->installEventFilter(this);
+}
+
+// get whether on vertical dock area (left or right)
+bool
+CQDockArea::
+isVerticalDockArea() const
+{
+  return (dockArea() == Qt::LeftDockWidgetArea || dockArea() == Qt::RightDockWidgetArea);
+}
+
+// get whether on horizontal dock area (top or bottom)
+bool
+CQDockArea::
+isHorizontalDockArea() const
+{
+  return (dockArea() == Qt::TopDockWidgetArea || dockArea() == Qt::BottomDockWidgetArea);
 }
 
 // set dock area widget
@@ -51,10 +72,6 @@ void
 CQDockArea::
 setDockWidth(int width, bool fixed)
 {
-  // try drag (no animate)
-  if (dragResize())
-    dragToDockWidth(width);
-
   // move so tab bar stays in a constant position
   if (isFloating() && dockArea() == Qt::RightDockWidgetArea) {
     int dx = this->width() - (width + EXTRA_FLOAT_WIDTH);
@@ -62,13 +79,21 @@ setDockWidth(int width, bool fixed)
     if (dx) move(this->pos() + QPoint(dx, 0));
   }
 
+  //------
+
+  // try drag (no animate)
+  if (dragResize())
+    dragToDockWidth(width);
+
+  //------
+
   bool oldIgnoreSize = setIgnoreSize(true);
 
   //------
 
-  if      (! fixed_ && fixed) // not fixed to fixed -> save height
+  if      (! isFixed() && fixed) // not fixed to fixed -> save width
     dockWidth_ = this->width();
-  else if (! fixed)
+  else if (! fixed) // to not fixed update width
     dockWidth_ = width;
 
   //------
@@ -76,7 +101,7 @@ setDockWidth(int width, bool fixed)
   // set palette width by setting min or max width (which makes it fixed sized)
   // and use timer to reset to min/max values after main window has finished its
   // layout processing (which would otherwise has reset this width)
-  if (! fixed_) {
+  if (! isFixed()) {
     oldMinSize_ = this->minimumSize();
     oldMaxSize_ = this->maximumSize();
   }
@@ -84,12 +109,24 @@ setDockWidth(int width, bool fixed)
   if (this->isFloating())
     width += EXTRA_FLOAT_WIDTH;
 
-  if (this->width() == width) {
+  // already at correct non-fixed size so we are done
+  if (! fixed && this->width() == width) {
     (void) setIgnoreSize(oldIgnoreSize);
+
+    fixed_ = fixed;
+
+    // signal size changed
+    emit dockWidthChanged(dockWidth_);
+
+    // signal resize done
+    emit resizeFinished();
+
     return;
   }
 
+  // non fixed needs two step process
   if (! fixed) {
+    // constraint to force required width
     if (this->width() < width)
       this->setMinimumWidth(width);
     else
@@ -97,11 +134,15 @@ setDockWidth(int width, bool fixed)
 
     (void) setIgnoreSize(oldIgnoreSize);
 
+    // delay for animation to reset size
     resizeTimer_->start(resizeTimeOut());
   }
+  // fixed just needs to force size
   else {
     this->setMinimumWidth(width);
     this->setMaximumWidth(width);
+
+    (void) setIgnoreSize(oldIgnoreSize);
 
     fixed_ = true;
   }
@@ -112,10 +153,6 @@ void
 CQDockArea::
 setDockHeight(int height, bool fixed)
 {
-  // try drag (no animate)
-  if (dragResize())
-    dragToDockHeight(height);
-
   // move so tab bar stays in a constant position
   if (isFloating() && dockArea() == Qt::BottomDockWidgetArea) {
     int dy = this->height() - (height + EXTRA_FLOAT_HEIGHT);
@@ -123,13 +160,21 @@ setDockHeight(int height, bool fixed)
     if (dy) move(this->pos() + QPoint(0, dy));
   }
 
+  //------
+
+  // try drag (no animate)
+  if (dragResize())
+    dragToDockHeight(height);
+
+  //------
+
   bool oldIgnoreSize = setIgnoreSize(true);
 
   //------
 
-  if      (! fixed_ && fixed) // not fixed to fixed save height
+  if      (! isFixed() && fixed) // not fixed to fixed save height
     dockHeight_ = this->height();
-  else if (! fixed)
+  else if (! fixed) // to not fixed update height
     dockHeight_ = height;
 
   //------
@@ -137,7 +182,7 @@ setDockHeight(int height, bool fixed)
   // set palette height by setting min or max height (which makes it fixed sized)
   // and use timer to reset to min/max values after main window has finished its
   // layout processing (which would otherwise has reset this height)
-  if (! fixed_) {
+  if (! isFixed()) {
     oldMinSize_ = this->minimumSize();
     oldMaxSize_ = this->maximumSize();
   }
@@ -145,12 +190,24 @@ setDockHeight(int height, bool fixed)
   if (this->isFloating())
     height += EXTRA_FLOAT_HEIGHT;
 
-  if (this->height() == height) {
+  // already at correct non-fixed size so we are done
+  if (! fixed && this->height() == height) {
     (void) setIgnoreSize(oldIgnoreSize);
+
+    fixed_ = fixed;
+
+    // signal size changed
+    emit dockHeightChanged(dockHeight_);
+
+    // signal resize done
+    emit resizeFinished();
+
     return;
   }
 
+  // non fixed needs two step process
   if (! fixed) {
+    // constraint to force required height
     if (this->height() < height)
       this->setMinimumHeight(height);
     else
@@ -158,11 +215,15 @@ setDockHeight(int height, bool fixed)
 
     (void) setIgnoreSize(oldIgnoreSize);
 
+    // delay for animation to reset size
     resizeTimer_->start(resizeTimeOut());
   }
+  // fixed just needs to force size
   else {
     this->setMinimumHeight(height);
     this->setMaximumHeight(height);
+
+    (void) setIgnoreSize(oldIgnoreSize);
 
     fixed_ = true;
   }
@@ -172,10 +233,20 @@ void
 CQDockArea::
 resetMinMaxSizes()
 {
+  // restore old size constraints
   this->setMinimumSize(oldMinSize_);
   this->setMaximumSize(oldMaxSize_);
 
   fixed_ = false;
+
+  // signal size changed
+  if (isVerticalDockArea())
+    emit dockWidthChanged(dockWidth_);
+  else
+    emit dockHeightChanged(dockHeight_);
+
+  // signal resize done
+  emit resizeFinished();
 }
 
 //------
@@ -193,13 +264,13 @@ dragToDockWidth(int width)
 
   //------
 
-  Qt::DockWidgetArea dockArea = mainWindow_->dockWidgetArea(this);
+  Qt::DockWidgetArea dockArea = window_->dockWidgetArea(this);
 
-  resetWidgetMinMaxWidth(this);
-  resetWidgetMinMaxWidth(this->widget());
+  CQWidgetUtil::resetWidgetMinMaxWidth(this);
+  CQWidgetUtil::resetWidgetMinMaxWidth(this->widget());
 
   if (! this->isFloating()) {
-    QWidget *w = mainWindow_->centralWidget();
+    QWidget *w = window_->centralWidget();
     if (! w) return;
 
     // calculate start point (inside splitter)
@@ -212,7 +283,7 @@ dragToDockWidth(int width)
     else
       return;
 
-    startPos = mainWindow_->mapFromGlobal(startPos);
+    startPos = window_->mapFromGlobal(startPos);
 
     // calculate end point (startPoint + delta)
     QPoint endPos;
@@ -233,11 +304,11 @@ dragToDockWidth(int width)
     // send events
     bool oldIgnoreSize = setIgnoreSize(true);
 
-    QApplication::sendEvent(mainWindow_, &pressEvent  );
+    QApplication::sendEvent(window_, &pressEvent  );
     qApp->processEvents(QEventLoop::ExcludeUserInputEvents);
-    QApplication::sendEvent(mainWindow_, &motionEvent );
+    QApplication::sendEvent(window_, &motionEvent );
     qApp->processEvents(QEventLoop::ExcludeUserInputEvents);
-    QApplication::sendEvent(mainWindow_, &releaseEvent);
+    QApplication::sendEvent(window_, &releaseEvent);
     qApp->processEvents(QEventLoop::ExcludeUserInputEvents);
 
     (void) setIgnoreSize(oldIgnoreSize);
@@ -273,13 +344,13 @@ dragToDockHeight(int height)
 
   //------
 
-  Qt::DockWidgetArea dockArea = mainWindow_->dockWidgetArea(this);
+  Qt::DockWidgetArea dockArea = window_->dockWidgetArea(this);
 
-  resetWidgetMinMaxHeight(this);
-  resetWidgetMinMaxHeight(this->widget());
+  CQWidgetUtil::resetWidgetMinMaxHeight(this);
+  CQWidgetUtil::resetWidgetMinMaxHeight(this->widget());
 
   if (! this->isFloating()) {
-    QWidget *w = mainWindow_->centralWidget();
+    QWidget *w = window_->centralWidget();
     if (! w) return;
 
     // calculate start point (inside splitter)
@@ -292,7 +363,7 @@ dragToDockHeight(int height)
     else
       return;
 
-    startPos = mainWindow_->mapFromGlobal(startPos);
+    startPos = window_->mapFromGlobal(startPos);
 
     // calculate end point (startPoint + delta)
     QPoint endPos;
@@ -313,11 +384,11 @@ dragToDockHeight(int height)
     // send events
     bool oldIgnoreSize = setIgnoreSize(true);
 
-    QApplication::sendEvent(mainWindow_, &pressEvent  );
+    QApplication::sendEvent(window_, &pressEvent  );
     qApp->processEvents(QEventLoop::ExcludeUserInputEvents);
-    QApplication::sendEvent(mainWindow_, &motionEvent );
+    QApplication::sendEvent(window_, &motionEvent );
     qApp->processEvents(QEventLoop::ExcludeUserInputEvents);
-    QApplication::sendEvent(mainWindow_, &releaseEvent);
+    QApplication::sendEvent(window_, &releaseEvent);
     qApp->processEvents(QEventLoop::ExcludeUserInputEvents);
 
     (void) setIgnoreSize(oldIgnoreSize);
@@ -340,16 +411,122 @@ dragToDockHeight(int height)
   }
 }
 
+//------
+
+// handle resize
 void
 CQDockArea::
-resetWidgetMinMaxWidth(QWidget *w)
+resizeEvent(QResizeEvent *)
 {
-  w->setMinimumWidth(0); w->setMaximumWidth(QWIDGETSIZE_MAX);
+  if (isFixed() || ignoreSize()) return;
+
+  if (isVerticalDockArea()) {
+    dockWidth_ = width();
+
+    emit dockWidthChanged(dockWidth_);
+  }
+  else {
+    dockHeight_ = height();
+
+    emit dockHeightChanged(dockHeight_);
+  }
+}
+
+//------
+
+// handle mouse press events on splitter and detached border
+bool
+CQDockArea::
+eventFilter(QObject *obj, QEvent *event)
+{
+  handleEvent(obj, event);
+
+  return QObject::eventFilter(obj, event);
 }
 
 void
 CQDockArea::
-resetWidgetMinMaxHeight(QWidget *w)
+handleEvent(QObject *obj, QEvent *event)
 {
-  w->setMinimumHeight(0); w->setMaximumHeight(QWIDGETSIZE_MAX);
+  QEvent::Type type = event->type();
+
+  if      (type == QEvent::MouseButtonPress) {
+    if (! isVisible()) return;
+
+    QMouseEvent *me = static_cast<QMouseEvent *>(event);
+
+    if (! isFloating()) {
+      if (qobject_cast<QMainWindow *>(obj) != window_) return;
+
+      if (isInsideSplitter(me->globalPos()))
+        splitterPressed_ = true;
+    }
+    else {
+      if (qobject_cast<CQDockArea *>(obj) != this) return;
+
+      if (isInsideFloatingBorder(me->pos()))
+        splitterPressed_ = true;
+    }
+  }
+  else if (type == QEvent::MouseButtonRelease) {
+    if (splitterPressed_)
+      splitterPressed_ = false;
+  }
+}
+
+//------
+
+bool
+CQDockArea::
+isInsideSplitter(const QPoint &gpos) const
+{
+  QRect r = getSplitterRect();
+
+  return r.contains(gpos);
+}
+
+bool
+CQDockArea::
+isInsideFloatingBorder(const QPoint &p) const
+{
+  QRect r = childrenRect();
+
+  return (p.x() < r.left () || p.y() < r.top   () ||
+          p.x() > r.right() || p.y() > r.bottom());
+}
+
+//------
+
+QRect
+CQDockArea::
+getSplitterRect() const
+{
+  QWidget *w = window_->centralWidget();
+  if (! w) return QRect();
+
+  QRect tr = QRect(   mapToGlobal(   rect().topLeft()),    rect().size());
+  QRect wr = QRect(w->mapToGlobal(w->rect().topLeft()), w->rect().size());
+
+  int x1, y1, x2, y2;
+
+  if      (dockArea() == Qt::LeftDockWidgetArea) {
+    x1 = tr.right() + 1, y1 = tr.top   ();
+    x2 = wr.left () - 1, y2 = tr.bottom();
+  }
+  else if (dockArea() == Qt::RightDockWidgetArea) {
+    x1 = wr.right() + 1, y1 = tr.top   ();
+    x2 = tr.left () - 1, y2 = tr.bottom();
+  }
+  else if (dockArea() == Qt::BottomDockWidgetArea) {
+    x1 = tr.left (), y1 = wr.bottom() + 1;
+    x2 = tr.right(), y2 = tr.top   () - 1;
+  }
+  else if (dockArea() == Qt::TopDockWidgetArea) {
+    x1 = tr.left (), y1 = tr.bottom() + 1;
+    x2 = tr.right(), y2 = wr.top   () - 1;
+  }
+  else
+    return QRect();
+
+  return QRect(x1, y1, x2 - x1 + 1, y2 - y1 + 1);
 }

@@ -19,6 +19,11 @@ class CQDockArea : public QDockWidget {
   //! get area
   Qt::DockWidgetArea dockArea() const { return dockArea_; }
 
+  //! get whether is on a vertical dock area (left or right)
+  bool isVerticalDockArea() const;
+  //! get whether is on a horizontal dock area (top or bottom)
+  bool isHorizontalDockArea() const;
+
   //! get/set drag resize
   bool dragResize() const { return dragResize_; }
   void setDragResize(bool dragResize) { dragResize_ = dragResize; }
@@ -33,6 +38,16 @@ class CQDockArea : public QDockWidget {
   //! get/set dock height
   int dockHeight() const { return dockHeight_; }
   void setDockHeight(int height, bool fixed=false);
+
+  //! get/set fixed state
+  bool isFixed() const { return fixed_; }
+  void setFixed(bool fixed) { fixed_ = fixed; }
+
+ signals:
+  void dockWidthChanged(int width);
+  void dockHeightChanged(int height);
+
+  void resizeFinished();
 
  private slots:
   void resetMinMaxSizes();
@@ -55,21 +70,32 @@ class CQDockArea : public QDockWidget {
   //! drag to dock height
   void dragToDockHeight(int height);
 
-  static void resetWidgetMinMaxWidth (QWidget *w);
-  static void resetWidgetMinMaxHeight(QWidget *w);
+  // handle resize
+  void resizeEvent(QResizeEvent *);
+
+  bool eventFilter(QObject *obj, QEvent *event);
+
+  void handleEvent(QObject *obj, QEvent *event);
+
+  bool isInsideSplitter(const QPoint &gpos) const;
+
+  bool isInsideFloatingBorder(const QPoint &p) const;
+
+  QRect getSplitterRect() const;
 
  protected:
-  QMainWindow        *mainWindow_;    //! parent main window
-  Qt::DockWidgetArea  dockArea_;      //! dock area
-  bool                dragResize_;    //! use drag resize
-  int                 resizeTimeout_; //! resize timeout
-  QTimer             *resizeTimer_;   //! resize timer
-  bool                ignoreSize_;    //! ignore resize events
-  int                 dockWidth_;     //! current dock width
-  int                 dockHeight_;    //! current dock height
-  mutable QSize       oldMinSize_;    //! saved min size
-  mutable QSize       oldMaxSize_;    //! saved max size
-  bool                fixed_;         //! is fixed size
+  QMainWindow        *window_;          //! parent main window
+  Qt::DockWidgetArea  dockArea_;        //! dock area
+  bool                dragResize_;      //! use drag resize
+  int                 resizeTimeout_;   //! resize timeout
+  QTimer             *resizeTimer_;     //! resize timer
+  bool                ignoreSize_;      //! ignore resize events
+  int                 dockWidth_;       //! current dock width
+  int                 dockHeight_;      //! current dock height
+  mutable QSize       oldMinSize_;      //! saved min size
+  mutable QSize       oldMaxSize_;      //! saved max size
+  bool                fixed_;           //! is fixed size
+  bool                splitterPressed_; //! splitter pressed
 };
 
 #endif

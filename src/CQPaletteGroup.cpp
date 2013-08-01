@@ -1,5 +1,6 @@
 #include <CQPaletteGroup.h>
 #include <CQPaletteArea.h>
+#include <CQWidgetUtil.h>
 #include <QVariant>
 #include <cassert>
 
@@ -135,9 +136,11 @@ setCurrentPage(CQPaletteAreaPage *page)
 
     if (id == page->id()) {
       tabbar_->setCurrentIndex(i);
+
       return;
     }
   }
+
 }
 
 CQPaletteAreaPage *
@@ -193,6 +196,9 @@ setTabIndex(int ind)
   stack_->setPage(page);
 
   emit currentPageChanged(page);
+
+  if (! window_->area()->isExpanded())
+    window_->area()->expandSlot();
 }
 
 void
@@ -435,9 +441,47 @@ uint CQPaletteAreaPage::lastId_ = 0;
 
 CQPaletteAreaPage::
 CQPaletteAreaPage(QWidget *w) :
- w_(w), hidden_(false)
+ w_(w), hidden_(false), resizable_(true), fixedSize_(100,100)
 {
   setObjectName("page");
 
   id_ = ++lastId_;
+}
+
+// get page min/max width
+void
+CQPaletteAreaPage::
+getMinMaxWidth(int &min_w, int &max_w) const
+{
+  if (resizable()) {
+    QWidget *w = const_cast<CQPaletteAreaPage *>(this)->widget();
+
+    QSize s = CQWidgetUtil::SmartMinSize(w);
+
+    min_w = s.width();
+    max_w = w->maximumWidth();
+  }
+  else {
+    min_w = fixedSize_.width();
+    max_w = min_w;
+  }
+}
+
+// get page min/max height
+void
+CQPaletteAreaPage::
+getMinMaxHeight(int &min_h, int &max_h) const
+{
+  if (resizable()) {
+    QWidget *w = const_cast<CQPaletteAreaPage *>(this)->widget();
+
+    QSize s = CQWidgetUtil::SmartMinSize(w);
+
+    min_h = s.height();
+    max_h = w->maximumHeight();
+  }
+  else {
+    min_h = fixedSize_.height();
+    max_h = min_h;
+  }
 }

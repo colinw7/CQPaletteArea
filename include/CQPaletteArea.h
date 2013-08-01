@@ -56,6 +56,8 @@ class CQPaletteAreaMgr : public QObject {
   // remove window from area
   void removeWindow(CQPaletteWindow *window);
 
+  CQPaletteArea *getArea(Qt::DockWidgetArea area) const;
+
   // get area at point
   CQPaletteArea *getAreaAt(const QPoint &pos, Qt::DockWidgetAreas allowedAreas) const;
 
@@ -70,6 +72,7 @@ class CQPaletteAreaMgr : public QObject {
  private:
   friend class CQPaletteArea;
   friend class CQPaletteWindow;
+  friend class CQPaletteAreaTitle;
 
   typedef std::map<Qt::DockWidgetArea,CQPaletteArea *> Palettes;
 
@@ -107,6 +110,8 @@ class CQPaletteArea : public CQDockArea {
 
   bool isPinned() const { return pinned_; }
 
+  Qt::DockWidgetAreas allowedAreas() const { return allowedAreas_; }
+
   // get first child window
   CQPaletteWindow *getWindow(int i=0);
 
@@ -139,6 +144,8 @@ class CQPaletteArea : public CQDockArea {
   friend class CQPaletteAreaTitle;
   friend class CQPaletteWindowTitle;
   friend class CQPalettePreview;
+
+  void setCollapsedSize();
 
   // update preview state
   void updatePreviewState();
@@ -197,8 +204,22 @@ class CQPaletteArea : public CQDockArea {
   // update size
   void updateSize();
 
+  // set size constraints
+  void setSizeConstraints();
+
+  // get dock min/max width
+  void getDockMinMaxWidth(int &min_w, int &max_w) const;
+
+  // get dock min/max height
+  void getDockMinMaxHeight(int &min_h, int &max_h) const;
+
+  void dockLeft();
+
   // handle resize
   void resizeEvent(QResizeEvent *);
+
+ private slots:
+  void updateSizeConstraints();
 
  private:
   friend class CQPaletteAreaMgr;
@@ -259,6 +280,8 @@ class CQPaletteWindow : public QWidget {
 
   int dockWidth () const;
   int dockHeight() const;
+
+  Qt::DockWidgetAreas allowedAreas() const { return allowedAreas_; }
 
   void expand();
 
@@ -370,6 +393,11 @@ class CQPaletteAreaTitle : public CQTitleBar {
   void attachSlot();
   void pinSlot();
   void expandSlot();
+
+  void dockLeftSlot();
+  void dockRightSlot();
+  void dockTopSlot();
+  void dockBottomSlot();
 
  private:
   // mouse state
