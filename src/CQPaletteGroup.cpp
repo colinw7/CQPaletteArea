@@ -76,6 +76,9 @@ removePage(CQPaletteAreaPage *page)
   stack_ ->removePage(page);
 
   pages_.erase(page->id());
+
+  if (! pages_.empty())
+    setCurrentPage(pages_.begin()->second);
 }
 
 void
@@ -110,14 +113,18 @@ CQPaletteAreaPage *
 CQPaletteGroup::
 currentPage() const
 {
-  uint id = tabbar_->getPageId(tabbar_->currentIndex());
+  int ind = tabbar_->currentIndex();
 
-  Pages::const_iterator p = pages_.find(id);
+  if (ind >= 0) {
+    uint id = tabbar_->getPageId(ind);
 
-  if (p == pages_.end())
-    return 0;
+    Pages::const_iterator p = pages_.find(id);
 
-  return (*p).second;
+    if (p != pages_.end())
+      return (*p).second;
+  }
+
+  return 0;
 }
 
 int
@@ -132,15 +139,16 @@ CQPaletteGroup::
 setCurrentPage(CQPaletteAreaPage *page)
 {
   for (int i = 0; i < tabbar_->count(); ++i) {
-    uint id = tabbar_->getPageId(i);
+    uint ind = tabbar_->tabInd(i);
+
+    uint id = tabbar_->getPageId(ind);
 
     if (id == page->id()) {
-      tabbar_->setCurrentIndex(i);
+      tabbar_->setCurrentIndex(ind);
 
       return;
     }
   }
-
 }
 
 CQPaletteAreaPage *
@@ -343,24 +351,27 @@ void
 CQPaletteGroupTabBar::
 insertPage(int ind, CQPaletteAreaPage *page)
 {
-  insertTab(ind, page->icon(), page->title());
+  int ind1 = insertTab(ind, page->icon(), page->title());
 
-  setTabData(ind, page->id());
+  setTabData(ind1, page->id());
 }
 
 void
 CQPaletteGroupTabBar::
 removePage(CQPaletteAreaPage *page)
 {
-  int i = 0;
+  int i = 0, ind = -1;
 
-  for ( ; i < count(); ++i)
-    if (getPageId(i) == page->id())
+  for ( ; i < count(); ++i) {
+    ind = tabInd(i);
+
+    if (getPageId(ind) == page->id())
       break;
+  }
 
   assert(i < count());
 
-  removeTab(i);
+  removeTab(ind);
 }
 
 uint

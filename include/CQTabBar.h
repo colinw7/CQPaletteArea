@@ -58,19 +58,21 @@ class CQTabBar : public QWidget {
   int addTab(CQTabBarButton *button);
 
   //! insert tab for specified text and widget
-  void insertTab(int ind, const QString &text, QWidget *widget=0);
+  int insertTab(int ind, const QString &text, QWidget *widget=0);
   //! insert tab for specified text, icon and widget
-  void insertTab(int ind, const QIcon &icon, const QString &text, QWidget *widget=0);
+  int insertTab(int ind, const QIcon &icon, const QString &text, QWidget *widget=0);
   //! insert tab with specified button
-  void insertTab(int ind, CQTabBarButton *button);
+  int insertTab(int ind, CQTabBarButton *button);
 
   //! remove tab for widget
   void removeTab(QWidget *widget);
-  //! remove tab at ind
+  //! remove tab for index
   void removeTab(int ind);
 
   //! get number of tabs
   int count() const;
+  //! get tab count position
+  int tabInd(int i) const;
 
   //! get current tab
   int currentIndex() const { return currentIndex_; }
@@ -142,6 +144,9 @@ class CQTabBar : public QWidget {
   //! get tab button
   CQTabBarButton *tabButton(int index) const;
 
+  //! get tab button array pos
+  int tabButtonPos(int index) const;
+
   //! handle paint event
   void paintEvent(QPaintEvent *);
 
@@ -201,7 +206,7 @@ class CQTabBar : public QWidget {
   void rscrollSlot();
 
  private:
-  typedef QList<CQTabBarButton *> TabButtons;
+  typedef std::vector<CQTabBarButton *> TabButtons;
 
   TabButtons            buttons_;      //! tab page buttons
   int                   currentIndex_; //! current tab index (-1 if none)

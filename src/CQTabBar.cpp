@@ -70,21 +70,19 @@ addTab(CQTabBarButton *button)
 {
   int ind = count();
 
-  insertTab(ind, button);
-
-  return ind;
+  return insertTab(ind, button);
 }
 
 // insert tab for widget with specified text
-void
+int
 CQTabBar::
 insertTab(int ind, const QString &text, QWidget *w)
 {
-  insertTab(ind, QIcon(), text, w);
+  return insertTab(ind, QIcon(), text, w);
 }
 
 // insert tab for widget with specified text
-void
+int
 CQTabBar::
 insertTab(int ind, const QIcon &icon, const QString &text, QWidget *w)
 {
@@ -95,25 +93,34 @@ insertTab(int ind, const QIcon &icon, const QString &text, QWidget *w)
   button->setIcon  (icon);
   button->setWidget(w);
 
-  insertTab(ind, button);
+  return insertTab(ind, button);
 }
 
-void
+int
 CQTabBar::
 insertTab(int ind, CQTabBarButton *button)
 {
-  button->setIndex(ind);
+  buttons_.push_back(0);
 
-  buttons_.push_back(button);
+  for (int i = buttons_.size() - 1; i > ind; --i)
+    buttons_[i] = buttons_[i - 1];
+
+  buttons_[ind] = button;
+
+  int index = buttons_.size();
+
+  button->setIndex(index);
 
   // update current
   if (! allowNoTab() && currentIndex() < 0)
-    setCurrentIndex(ind);
+    setCurrentIndex(index);
 
   // update display
   updateSizes();
 
   update();
+
+  return index;
 }
 
 // remove tab for widget
@@ -128,15 +135,16 @@ removeTab(QWidget *widget)
   removeTab(ind);
 }
 
-// remove tab at index
+// remove tab for index
 void
 CQTabBar::
 removeTab(int ind)
 {
-  // remove and delete button
-  CQTabBarButton *button = buttons_.at(ind);
+  int pos = tabButtonPos(ind);
 
-  buttons_[ind] = 0;
+  CQTabBarButton *button = buttons_[pos];
+
+  buttons_[pos] = 0;
 
   delete button;
 
@@ -159,24 +167,48 @@ count() const
 
   for (TabButtons::const_iterator p = buttons_.begin(); p != buttons_.end(); ++p) {
     CQTabBarButton *button = *p;
+    if (! button) continue;
 
-    if (button)
-      ++n;
+    ++n;
   }
 
   return n;
 }
 
+// get tab at count
+int
+CQTabBar::
+tabInd(int i) const
+{
+  int n = 0;
+
+  for (TabButtons::const_iterator p = buttons_.begin(); p != buttons_.end(); ++p) {
+    CQTabBarButton *button = *p;
+    if (! button) continue;
+
+    if (n == i)
+      return button->index();
+
+    ++n;
+  }
+
+  return -1;
+}
+
 // set current tab
 void
 CQTabBar::
-setCurrentIndex(int index)
+setCurrentIndex(int ind)
 {
-  if (index < -1 || index >= count()) return;
+  // button array can contain empty slots so ensure the requested one is valid
+  CQTabBarButton *button = tabButton(ind);
+  if (! button) return;
 
-  if (index != currentIndex_) {
-    currentIndex_ = index;
+  // process if changed
+  if (ind != currentIndex_) {
+    currentIndex_ = ind;
 
+    // if one tab must be active and nothing active then use first non-null button
     if (! allowNoTab() && currentIndex_ < 0 && count() > 0)
       currentIndex_ = 0;
 
@@ -240,11 +272,12 @@ setButtonStyle(const Qt::ToolButtonStyle &buttonStyle)
 // set tab text
 void
 CQTabBar::
-setTabText(int index, const QString &text)
+setTabText(int ind, const QString &text)
 {
-  CQTabBarButton *button = tabButton(index);
+  CQTabBarButton *button = tabButton(ind);
 
-  button->setText(text);
+  if (button)
+    button->setText(text);
 
   updateSizes();
 
@@ -254,11 +287,12 @@ setTabText(int index, const QString &text)
 // set tab icon
 void
 CQTabBar::
-setTabIcon(int index, const QIcon &icon)
+setTabIcon(int ind, const QIcon &icon)
 {
-  CQTabBarButton *button = tabButton(index);
+  CQTabBarButton *button = tabButton(ind);
 
-  button->setIcon(icon);
+  if (button)
+    button->setIcon(icon);
 
   updateSizes();
 
@@ -268,21 +302,23 @@ setTabIcon(int index, const QIcon &icon)
 // set tab tooltip
 void
 CQTabBar::
-setTabToolTip(int index, const QString &tip)
+setTabToolTip(int ind, const QString &tip)
 {
-  CQTabBarButton *button = tabButton(index);
+  CQTabBarButton *button = tabButton(ind);
 
-  button->setToolTip(tip);
+  if (button)
+    button->setToolTip(tip);
 }
 
 // set tab visible
 void
 CQTabBar::
-setTabVisible(int index, bool visible)
+setTabVisible(int ind, bool visible)
 {
-  CQTabBarButton *button = tabButton(index);
+  CQTabBarButton *button = tabButton(ind);
 
-  button->setVisible(visible);
+  if (button)
+    button->setVisible(visible);
 
   updateSizes();
 
@@ -292,11 +328,12 @@ setTabVisible(int index, bool visible)
 // set tab pending state
 void
 CQTabBar::
-setTabPending(int index, bool pending)
+setTabPending(int ind, bool pending)
 {
-  CQTabBarButton *button = tabButton(index);
+  CQTabBarButton *button = tabButton(ind);
 
-  button->setPending(pending);
+  if (button)
+    button->setPending(pending);
 
   update();
 }
@@ -304,19 +341,20 @@ setTabPending(int index, bool pending)
 // set tab data
 void
 CQTabBar::
-setTabData(int index, const QVariant &data)
+setTabData(int ind, const QVariant &data)
 {
-  CQTabBarButton *button = tabButton(index);
+  CQTabBarButton *button = tabButton(ind);
 
-  button->setData(data);
+  if (button)
+    button->setData(data);
 }
 
 // get tab data
 QVariant
 CQTabBar::
-tabData(int index) const
+tabData(int ind) const
 {
-  CQTabBarButton *button = tabButton(index);
+  CQTabBarButton *button = tabButton(ind);
 
   if (button)
     return button->data();
@@ -327,31 +365,46 @@ tabData(int index) const
 // get button for tab
 CQTabBarButton *
 CQTabBar::
-tabButton(int index) const
+tabButton(int ind) const
 {
-  if (index >= 0 && index < count()) {
-    CQTabBarButton *button = buttons_.at(index);
-    assert(button);
+  for (TabButtons::const_iterator p = buttons_.begin(); p != buttons_.end(); ++p) {
+    CQTabBarButton *button = *p;
 
-    return button;
+    if (button && button->index() == ind)
+      return button;
   }
-  else
-    return NULL;
+
+  return 0;
+}
+
+// get array pos for tab
+int
+CQTabBar::
+tabButtonPos(int ind) const
+{
+  for (int i = 0; i < int(buttons_.size()); ++i) {
+    CQTabBarButton *button = buttons_[i];
+
+    if (button && button->index() == ind)
+      return i;
+  }
+
+  assert(false);
+
+  return -1;
 }
 
 // get widget for tab
 QWidget *
 CQTabBar::
-tabWidget(int index) const
+tabWidget(int ind) const
 {
-  if (index >= 0 && index < count()) {
-    CQTabBarButton *button = buttons_.at(index);
-    if (! button) return NULL;
+  CQTabBarButton *button = tabButton(ind);
 
+  if (button)
     return button->widget();
-  }
-  else
-    return NULL;
+
+  return 0;
 }
 
 // draw tab buttons
@@ -369,8 +422,7 @@ paintEvent(QPaintEvent *)
   if (offset_ > 0) {
     int offset = offset_;
 
-    for (TabButtons::const_iterator p = buttons_.begin();
-           offset > 0 && p != buttons_.end(); ++p) {
+    for (TabButtons::const_iterator p = buttons_.begin(); offset > 0 && p != buttons_.end(); ++p) {
       CQTabBarButton *button = *p;
 
       if (! button || ! button->visible()) continue;
@@ -399,8 +451,8 @@ paintEvent(QPaintEvent *)
   baseStyle.initFrom(this);
 
   // calculate button geometry and first/last tab buttons
-  CQTabBarButton *firstButton = NULL;
-  CQTabBarButton *lastButton  = NULL;
+  CQTabBarButton *firstButton = 0;
+  CQTabBarButton *lastButton  = 0;
 
   int x = -xo;
 
@@ -409,7 +461,7 @@ paintEvent(QPaintEvent *)
 
     if (! button || ! button->visible()) continue;
 
-    if (firstButton == NULL)
+    if (firstButton == 0)
       firstButton = button;
     else
       lastButton = button;
@@ -659,10 +711,10 @@ event(QEvent *e)
   if (e->type() == QEvent::ToolTip) {
     QHelpEvent *helpEvent = static_cast<QHelpEvent *>(e);
 
-    int index = tabAt(helpEvent->pos());
+    int ind = tabAt(helpEvent->pos());
 
-    if (index != -1) {
-      CQTabBarButton *button = buttons_.at(index);
+    if (ind != -1) {
+      CQTabBarButton *button = tabButton(ind);
 
       if (button)
         QToolTip::showText(helpEvent->globalPos(), button->toolTip());
@@ -752,7 +804,7 @@ mouseMoveEvent(QMouseEvent *e)
   if (e->buttons() & Qt::LeftButton) {
     // check drag distance
     if ((e->pos() - pressPos_).manhattanLength() >= QApplication::startDragDistance()) {
-      CQTabBarButton *button = buttons_.at(pressIndex_);
+      CQTabBarButton *button = tabButton(pressIndex_);
 
       QIcon icon = (button ? button->icon() : QIcon());
 
@@ -829,11 +881,14 @@ dropEvent(QDropEvent *event)
   if (fromIndex < 0 || toIndex < 0 || fromIndex == toIndex)
     return;
 
-  CQTabBarButton *button1 = buttons_[fromIndex];
-  CQTabBarButton *button2 = buttons_[toIndex  ];
+  int pos1 = tabButtonPos(fromIndex);
+  int pos2 = tabButtonPos(toIndex  );
 
-  buttons_[toIndex  ] = button1;
-  buttons_[fromIndex] = button2;
+  CQTabBarButton *button1 = buttons_[pos1];
+  CQTabBarButton *button2 = buttons_[pos2];
+
+  buttons_[pos1] = button1;
+  buttons_[pos2] = button2;
 
   button1->setIndex(toIndex);
   button2->setIndex(fromIndex);

@@ -145,6 +145,10 @@ class CQPaletteArea : public CQDockArea {
   friend class CQPaletteWindowTitle;
   friend class CQPalettePreview;
 
+  typedef std::vector<CQPaletteWindow *> Windows;
+
+  const Windows &getWindows() const { return windows_; }
+
   void setCollapsedSize();
 
   // update preview state
@@ -168,6 +172,8 @@ class CQPaletteArea : public CQDockArea {
 
   Pages getPages() const;
 
+  Qt::DockWidgetAreas calcAllowedAreas() const;
+
   // is floating
   bool isFloating() const { return floating_; }
   // set floating
@@ -179,7 +185,7 @@ class CQPaletteArea : public CQDockArea {
   void setDetached(bool detached);
 
   // set floated
-  void setFloated(bool floating, const QPoint &pos=QPoint());
+  void setFloated(bool floating, const QPoint &pos=QPoint(), bool dragAll=false);
   // cancel floating
   void cancelFloating();
 
@@ -213,7 +219,9 @@ class CQPaletteArea : public CQDockArea {
   // get dock min/max height
   void getDockMinMaxHeight(int &min_h, int &max_h) const;
 
-  void dockLeft();
+  void dockAt(Qt::DockWidgetArea area);
+
+  int getDetachPos(int w, int h) const;
 
   // handle resize
   void resizeEvent(QResizeEvent *);
@@ -224,8 +232,6 @@ class CQPaletteArea : public CQDockArea {
  private:
   friend class CQPaletteAreaMgr;
   friend class CQPaletteWindow;
-
-  typedef std::vector<CQPaletteWindow *> Windows;
 
   CQPaletteAreaMgr    *mgr_;            // parent manager
   CQPaletteAreaTitle  *title_;          // title bar
@@ -313,6 +319,8 @@ class CQPaletteWindow : public QWidget {
 
   Pages getPages() const;
 
+  uint numPages() const;
+
   // is floating
   bool isFloating() const { return floating_; }
   // set floating
@@ -324,7 +332,7 @@ class CQPaletteWindow : public QWidget {
   void setDetached(bool detached);
 
   // set floated
-  void setFloated(bool floating, const QPoint &pos=QPoint());
+  void setFloated(bool floating, const QPoint &pos=QPoint(), bool dragAll=false);
 
   // cancel floating
   void cancelFloating();
@@ -339,6 +347,15 @@ class CQPaletteWindow : public QWidget {
   void clearDrop();
 
  public slots:
+  void dockLeftSlot();
+  void dockRightSlot();
+  void dockTopSlot();
+  void dockBottomSlot();
+
+  void attachSlot();
+  void detachSlot();
+  void splitSlot();
+  void joinSlot();
   void closeSlot();
 
  private:
@@ -407,6 +424,7 @@ class CQPaletteAreaTitle : public CQTitleBar {
     bool   escapePress;
     QPoint pressPos;
     bool   floating;
+    bool   dragAll;
 
     MouseState(){
       reset();
@@ -417,6 +435,7 @@ class CQPaletteAreaTitle : public CQTitleBar {
       moving      = false;
       escapePress = false;
       floating    = false;
+      dragAll     = false;
     }
   };
 
@@ -466,6 +485,7 @@ class CQPaletteWindowTitle : public CQTitleBar {
     bool   escapePress;
     QPoint pressPos;
     bool   floating;
+    bool   dragAll;
 
     MouseState(){
       reset();
@@ -476,6 +496,7 @@ class CQPaletteWindowTitle : public CQTitleBar {
       moving      = false;
       escapePress = false;
       floating    = false;
+      dragAll     = false;
     }
   };
 

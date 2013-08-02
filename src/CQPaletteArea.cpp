@@ -7,6 +7,7 @@
 #include <CQWidgetUtil.h>
 
 #include <QApplication>
+#include <QDesktopWidget>
 #include <QMainWindow>
 #include <QScrollArea>
 #include <QVBoxLayout>
@@ -306,6 +307,10 @@ addWindow(CQPaletteWindow *window)
   splitter_->addWidget(window);
 
   updateSplitterSizes();
+
+  for (uint i = 0; i < windows_.size(); ++i)
+    if (windows_[i] == window)
+      assert(false);
 
   windows_.push_back(window);
 
@@ -616,6 +621,8 @@ attachSlot()
   if (! detached_) return;
 
   mgr_->window()->addDockWidget(dockArea(), this);
+
+  setDetached(false);
 }
 
 void
@@ -627,6 +634,10 @@ detachSlot()
   setDetached(true);
 
   setParent(0, Constants::detachedFlags);
+
+  int detachPos = getDetachPos(width(), height());
+
+  move(detachPos, detachPos);
 
   show();
 }
@@ -725,7 +736,7 @@ setFloating(bool floating)
 
 void
 CQPaletteArea::
-setFloated(bool floating, const QPoint &pos)
+setFloated(bool floating, const QPoint &pos, bool /*dragAll*/)
 {
   if (floating == floating_)
     return;
@@ -735,17 +746,15 @@ setFloated(bool floating, const QPoint &pos)
 
     setParent(0, Constants::floatingFlags);
 
-    move(pos - lpos);
+    if (! pos.isNull())
+      move(pos - lpos);
+    else {
+      int detachPos = getDetachPos(width(), height());
 
-    allowedAreas_ = Qt::AllDockWidgetAreas;
-
-    Pages pages = getPages();
-
-    for (Pages::const_iterator p = pages.begin(); p != pages.end(); ++p) {
-      CQPaletteAreaPage *page = *p;
-
-      allowedAreas_ &= page->allowedAreas();
+      move(detachPos, detachPos);
     }
+
+    allowedAreas_ = calcAllowedAreas();
   }
   else
     mgr_->window()->addDockWidget(dockArea(), this);
@@ -753,6 +762,23 @@ setFloated(bool floating, const QPoint &pos)
   setFloating(floating);
 
   show();
+}
+
+Qt::DockWidgetAreas
+CQPaletteArea::
+calcAllowedAreas() const
+{
+  Qt::DockWidgetAreas allowedAreas = Qt::AllDockWidgetAreas;
+
+  Pages pages = getPages();
+
+  for (Pages::const_iterator p = pages.begin(); p != pages.end(); ++p) {
+    CQPaletteAreaPage *page = *p;
+
+    allowedAreas &= page->allowedAreas();
+  }
+
+  return allowedAreas;
 }
 
 void
@@ -936,9 +962,9 @@ getHighlightRect() const
 
 void
 CQPaletteArea::
-dockLeft()
+dockAt(Qt::DockWidgetArea dockArea)
 {
-  CQPaletteArea *area = mgr_->getArea(Qt::LeftDockWidgetArea);
+  CQPaletteArea *area = mgr_->getArea(dockArea);
 
   if (area->windows_.empty()) {
     mgr_->swapAreas(this, area);
@@ -958,6 +984,26 @@ dockLeft()
 
     hide();
   }
+}
+
+// get position of detached area
+int
+CQPaletteArea::
+getDetachPos(int w, int h) const
+{
+  static int detachPos = 16;
+
+  const QRect &screenRect = QApplication::desktop()->availableGeometry();
+
+  if (detachPos + w >= screenRect.right () ||
+      detachPos + h >= screenRect.bottom())
+    detachPos = 16;
+
+  int pos = detachPos;
+
+  detachPos += 16;
+
+  return pos;
 }
 
 void
@@ -1318,6 +1364,13 @@ getPages() const
   return pages;
 }
 
+uint
+CQPaletteWindow::
+numPages() const
+{
+  return group()->numPages();
+}
+
 // update detached state
 void
 CQPaletteWindow::
@@ -1344,7 +1397,7 @@ setFloating(bool floating)
 
 void
 CQPaletteWindow::
-setFloated(bool floating, const QPoint &pos)
+setFloated(bool floating, const QPoint &pos, bool dragAll)
 {
   if (floating == floating_)
     return;
@@ -1354,9 +1407,10 @@ setFloated(bool floating, const QPoint &pos)
 
     CQPaletteAreaPage *currentPage = this->currentPage();
 
-    allowedAreas_ = currentPage->allowedAreas();
+    if (currentPage)
+      allowedAreas_ = currentPage->allowedAreas();
 
-    if (pages.size() > 1) {
+    if (! dragAll && pages.size() > 1) {
       newWindow_ = mgr_->addWindow(area_->dockArea());
 
       parentPos_ = group_->currentIndex();
@@ -1380,7 +1434,13 @@ setFloated(bool floating, const QPoint &pos)
 
     setParent(0, Constants::floatingFlags);
 
-    move(pos - lpos);
+    if (! pos.isNull())
+      move(pos - lpos);
+    else {
+      int detachPos = area_->getDetachPos(width(), height());
+
+      move(detachPos, detachPos);
+    }
   }
   else
     setParent(parent_, Constants::normalFlags);
@@ -1460,6 +1520,115 @@ CQPaletteWindow::
 clearDrop()
 {
   mgr_->clearHighlight();
+}
+
+void
+CQPaletteWindow::
+dockLeftSlot()
+{
+  //dockAt(Qt::LeftDockWidgetArea);
+}
+
+void
+CQPaletteWindow::
+dockRightSlot()
+{
+  //dockAt(Qt::RightDockWidgetArea);
+}
+
+void
+CQPaletteWindow::
+dockTopSlot()
+{
+  //dockAt(Qt::TopDockWidgetArea);
+}
+
+void
+CQPaletteWindow::
+dockBottomSlot()
+{
+  //dockAt(Qt::BottomDockWidgetArea);
+}
+
+void
+CQPaletteWindow::
+attachSlot()
+{
+  if (! detached_) return;
+
+  area_->splitter()->addWidget(this);
+
+  setDetached(false);
+}
+
+void
+CQPaletteWindow::
+detachSlot()
+{
+  if (detached_) return;
+
+  setDetached(true);
+
+  setParent(0, Constants::detachedFlags);
+
+  int detachPos = area_->getDetachPos(width(), height());
+
+  move(detachPos, detachPos);
+
+  show();
+}
+
+void
+CQPaletteWindow::
+splitSlot()
+{
+  CQPaletteGroup::PageArray pages = getPages();
+
+  if (pages.size() == 1) return;
+
+  CQPaletteAreaPage *currentPage = this->currentPage();
+
+  if (! currentPage) return;
+
+  CQPaletteWindow *newWindow = mgr_->addWindow(area_->dockArea());
+
+  removePage(currentPage);
+
+  newWindow->addPage(currentPage);
+}
+
+void
+CQPaletteWindow::
+joinSlot()
+{
+  const CQPaletteArea::Windows &windows = area_->getWindows();
+
+  if (windows.size() <= 1) return;
+
+  CQPaletteWindow *joinWindow = 0;
+
+  for (CQPaletteArea::Windows::const_iterator p = windows.begin(); p != windows.end(); ++p) {
+    CQPaletteWindow *window = *p;
+
+    if (window == this) continue;
+
+    if (! joinWindow || window->numPages() > joinWindow->numPages())
+      joinWindow = window;
+  }
+
+  if (! joinWindow) return;
+
+  CQPaletteGroup::PageArray pages = getPages();
+
+  for (uint i = 0; i < pages.size(); ++i) {
+    CQPaletteAreaPage *page = pages[i];
+
+    removePage(page);
+
+    joinWindow->addPage(page);
+  }
+
+  this->deleteLater();
 }
 
 void
@@ -1578,25 +1747,28 @@ void
 CQPaletteAreaTitle::
 dockLeftSlot()
 {
-  area_->dockLeft();
+  area_->dockAt(Qt::LeftDockWidgetArea);
 }
 
 void
 CQPaletteAreaTitle::
 dockRightSlot()
 {
+  area_->dockAt(Qt::RightDockWidgetArea);
 }
 
 void
 CQPaletteAreaTitle::
 dockTopSlot()
 {
+  area_->dockAt(Qt::TopDockWidgetArea);
 }
 
 void
 CQPaletteAreaTitle::
 dockBottomSlot()
 {
+  area_->dockAt(Qt::BottomDockWidgetArea);
 }
 
 void
@@ -1674,6 +1846,10 @@ contextMenuEvent(QContextMenuEvent *e)
     const QString &text = action->text();
 
     if      (text == "Dock") {
+      Qt::DockWidgetAreas allowedAreas = area_->calcAllowedAreas();
+
+      allowedAreas &= ~area_->dockArea();
+
       QMenu *menu = action->menu();
 
       QList<QAction *> actions1 = menu->actions();
@@ -1684,16 +1860,16 @@ contextMenuEvent(QContextMenuEvent *e)
         const QString &text1 = action1->text();
 
         if      (text1 == "Left") {
-          action1->setEnabled(area_->dockArea() != Qt::LeftDockWidgetArea);
+          action1->setEnabled(allowedAreas & Qt::LeftDockWidgetArea);
         }
         else if (text1 == "Right") {
-          action1->setEnabled(area_->dockArea() != Qt::RightDockWidgetArea);
+          action1->setEnabled(allowedAreas & Qt::RightDockWidgetArea);
         }
         else if (text1 == "Top") {
-          action1->setEnabled(area_->dockArea() != Qt::TopDockWidgetArea);
+          action1->setEnabled(allowedAreas & Qt::TopDockWidgetArea);
         }
         else if (text1 == "Bottom") {
-          action1->setEnabled(area_->dockArea() != Qt::BottomDockWidgetArea);
+          action1->setEnabled(allowedAreas & Qt::BottomDockWidgetArea);
         }
       }
     }
@@ -1731,6 +1907,7 @@ mousePressEvent(QMouseEvent *e)
   mouseState_.pressed  = true;
   mouseState_.pressPos = e->globalPos();
   mouseState_.floating = area_->isFloating();
+  mouseState_.dragAll  = (e->modifiers() & Qt::ShiftModifier);
 
   setFocusPolicy(Qt::StrongFocus);
 }
@@ -1748,7 +1925,7 @@ mouseMoveEvent(QMouseEvent *e)
   mouseState_.moving = true;
 
   if (! area_->isFloating())
-    area_->setFloated(true, e->globalPos());
+    area_->setFloated(true, e->globalPos(), mouseState_.dragAll);
 
   int dx = e->globalPos().x() - mouseState_.pressPos.x();
   int dy = e->globalPos().y() - mouseState_.pressPos.y();
@@ -1857,9 +2034,29 @@ contextMenuEvent(QContextMenuEvent *e)
 
     // TODO: add pages
 
-    QAction *closeAction = contextMenu_->addAction("Close");
+    QMenu *dockMenu = contextMenu_->addMenu("Dock");
 
-    connect(closeAction, SIGNAL(triggered()), window_, SLOT(closeSlot()));
+    QAction *dockLeftItem   = dockMenu->addAction("Left");
+    QAction *dockRightItem  = dockMenu->addAction("Right");
+    QAction *dockTopItem    = dockMenu->addAction("Top");
+    QAction *dockBottomItem = dockMenu->addAction("Bottom");
+
+    connect(dockLeftItem  , SIGNAL(triggered()), window_, SLOT(dockLeftSlot()));
+    connect(dockRightItem , SIGNAL(triggered()), window_, SLOT(dockRightSlot()));
+    connect(dockTopItem   , SIGNAL(triggered()), window_, SLOT(dockTopSlot()));
+    connect(dockBottomItem, SIGNAL(triggered()), window_, SLOT(dockBottomSlot()));
+
+    QAction *attachAction = contextMenu_->addAction("Attach");
+    QAction *detachAction = contextMenu_->addAction("Detach");
+    QAction *splitAction  = contextMenu_->addAction("Split");
+    QAction *joinAction   = contextMenu_->addAction("Join" );
+    QAction *closeAction  = contextMenu_->addAction("Close");
+
+    connect(attachAction, SIGNAL(triggered()), window_, SLOT(attachSlot()));
+    connect(detachAction, SIGNAL(triggered()), window_, SLOT(detachSlot()));
+    connect(splitAction , SIGNAL(triggered()), window_, SLOT(splitSlot()));
+    connect(joinAction  , SIGNAL(triggered()), window_, SLOT(joinSlot()));
+    connect(closeAction , SIGNAL(triggered()), window_, SLOT(closeSlot()));
   }
 
   contextMenu_->popup(e->globalPos());
@@ -1876,6 +2073,10 @@ mousePressEvent(QMouseEvent *e)
   mouseState_.pressed  = true;
   mouseState_.pressPos = e->globalPos();
   mouseState_.floating = window_->area()->isFloating();
+  mouseState_.dragAll  = (e->modifiers() & Qt::ShiftModifier);
+
+  if (window_->isDetached())
+    mouseState_.dragAll = true;
 
   setFocusPolicy(Qt::StrongFocus);
 }
@@ -1893,7 +2094,7 @@ mouseMoveEvent(QMouseEvent *e)
   mouseState_.moving = true;
 
   if (! window_->isFloating())
-    window_->setFloated(true, e->globalPos());
+    window_->setFloated(true, e->globalPos(), mouseState_.dragAll);
 
   int dx = e->globalPos().x() - mouseState_.pressPos.x();
   int dy = e->globalPos().y() - mouseState_.pressPos.y();
