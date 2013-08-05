@@ -6,6 +6,8 @@
 #include <QIcon>
 #include <QVariant>
 
+class QMimeData;
+
 class CQTabBarButton;
 class CQTabBarScrollButton;
 class QStylePainter;
@@ -165,8 +167,17 @@ class CQTabBar : public QWidget {
   //! handle drag enter
   void dragEnterEvent(QDragEnterEvent *event);
 
+  //! handle drag move
+  void dragMoveEvent(QDragMoveEvent *event);
+
   //! handle drop
   void dropEvent(QDropEvent *event);
+
+  //! check if drag valid
+  bool dragValid(const QMimeData *m, QString &type, int &tabNum) const;
+
+  //! drag pos valid
+  bool dragPosValid(const QString &type, const QPoint &pos) const;
 
   //! handle context menu event
   void contextMenuEvent(QContextMenuEvent *e);
@@ -198,6 +209,12 @@ class CQTabBar : public QWidget {
 
   //! request context menu
   void showContextMenuSignal(const QPoint &p);
+
+  //! notify tab moved (same group)
+  void tabMoved(int, int);
+
+  //! request page move (to another palette group)
+  void tabMovePageSignal(const QString &, int, const QString &, int);
 
  private slots:
   //! handle left/bottom scroll button press

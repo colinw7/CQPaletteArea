@@ -4,6 +4,76 @@
 #include <QVariant>
 #include <cassert>
 
+CQPaletteGroupMgr *
+CQPaletteGroupMgr::
+getInstance()
+{
+  static CQPaletteGroupMgr *mgr;
+
+  if (! mgr)
+    mgr = new CQPaletteGroupMgr;
+
+  return mgr;
+}
+
+CQPaletteGroupMgr::
+CQPaletteGroupMgr()
+{
+}
+
+CQPaletteGroup *
+CQPaletteGroupMgr::
+createGroup(CQPaletteWindow *window)
+{
+  CQPaletteGroup *group = new CQPaletteGroup(window);
+
+  groups_.push_back(group);
+
+  return group;
+}
+
+void
+CQPaletteGroupMgr::
+removeGroup(CQPaletteGroup *group)
+{
+  uint i = 0;
+
+  for ( ; i < groups_.size(); ++i)
+    if (groups_[i] == group)
+      break;
+
+  assert(i < groups_.size());
+
+  for ( ; i < groups_.size(); ++i)
+    groups_[i] = groups_[i + 1];
+
+  groups_.pop_back();
+}
+
+CQPaletteGroup *
+CQPaletteGroupMgr::
+getGroup(const QString &name) const
+{
+  for (uint i = 0; i < groups_.size(); ++i)
+    if (groups_[i]->objectName() == name)
+      return groups_[i];
+
+  return 0;
+}
+
+CQPaletteGroup *
+CQPaletteGroupMgr::
+getGroupFromTabBar(const QString &name) const
+{
+  for (uint i = 0; i < groups_.size(); ++i)
+    if (groups_[i]->tabbar()->objectName() == name)
+      return groups_[i];
+
+  return 0;
+}
+
+//-------
+
 CQPaletteGroup::
 CQPaletteGroup(CQPaletteWindow *window) :
  window_(window)
@@ -18,7 +88,16 @@ CQPaletteGroup(CQPaletteWindow *window) :
   connect(tabbar_, SIGNAL(currentChanged(int)), this, SLOT(setTabIndex(int)));
   connect(tabbar_, SIGNAL(currentPressed(int)), this, SLOT(pressTabIndex(int)));
 
+  connect(tabbar_, SIGNAL(tabMovePageSignal(const QString &, int, const QString &, int)),
+          this, SLOT(tabMovePageSlot(const QString &, int, const QString &, int)));
+
   updateLayout();
+}
+
+CQPaletteGroup::
+~CQPaletteGroup()
+{
+  CQPaletteGroupMgrInst->removeGroup(this);
 }
 
 Qt::DockWidgetArea
@@ -48,10 +127,14 @@ addPage(CQPaletteAreaPage *page)
 {
   page->setGroup(this);
 
-  tabbar_->addPage(page);
-  stack_ ->addPage(page);
+  page->setDockArea(dockArea());
 
   pages_[page->id()] = page;
+
+  page->setHidden(false);
+
+  tabbar_->addPage(page);
+  stack_ ->addPage(page);
 }
 
 void
@@ -60,10 +143,12 @@ insertPage(int ind, CQPaletteAreaPage *page)
 {
   page->setGroup(this);
 
-  tabbar_->insertPage(ind, page);
-  stack_ ->addPage   (page);
+  page->setDockArea(dockArea());
 
   pages_[page->id()] = page;
+
+  tabbar_->insertPage(ind, page);
+  stack_ ->addPage   (page);
 }
 
 void
@@ -71,6 +156,8 @@ CQPaletteGroup::
 removePage(CQPaletteAreaPage *page)
 {
   page->setGroup(0);
+
+  page->setHidden(true);
 
   tabbar_->removePage(page);
   stack_ ->removePage(page);
@@ -92,6 +179,9 @@ showPage(CQPaletteAreaPage *page)
 
   tabbar_->addPage(page);
   stack_ ->addPage(page);
+
+  if (! currentPage())
+    setCurrentPage(page);
 }
 
 void
@@ -101,12 +191,15 @@ hidePage(CQPaletteAreaPage *page)
   if (page->hidden())
     return;
 
+  bool current = (page == currentPage());
+
   page->setHidden(true);
 
   tabbar_->removePage(page);
   stack_ ->removePage(page);
 
-  // if (page == currentPage) updateCurrentPage();
+  if (current)
+    updateCurrentPage();
 }
 
 CQPaletteAreaPage *
@@ -115,16 +208,10 @@ currentPage() const
 {
   int ind = tabbar_->currentIndex();
 
-  if (ind >= 0) {
-    uint id = tabbar_->getPageId(ind);
+  if (ind < 0)
+    return 0;
 
-    Pages::const_iterator p = pages_.find(id);
-
-    if (p != pages_.end())
-      return (*p).second;
-  }
-
-  return 0;
+  return getPageForIndex(ind);
 }
 
 int
@@ -146,6 +233,20 @@ setCurrentPage(CQPaletteAreaPage *page)
     if (id == page->id()) {
       tabbar_->setCurrentIndex(ind);
 
+      return;
+    }
+  }
+}
+
+void
+CQPaletteGroup::
+updateCurrentPage()
+{
+  for (Pages::const_iterator p = pages_.begin(); p != pages_.end(); ++p) {
+    CQPaletteAreaPage *page = (*p).second;
+
+    if (! page->hidden()) {
+      setCurrentPage(page);
       return;
     }
   }
@@ -194,29 +295,52 @@ void
 CQPaletteGroup::
 setTabIndex(int ind)
 {
-  uint id = tabbar_->getPageId(ind);
-
-  Pages::const_iterator p = pages_.find(id);
-  if (p == pages_.end()) return;
-
-  CQPaletteAreaPage *page = (*p).second;
+  CQPaletteAreaPage *page = getPageForIndex(ind);
+  if (! page) return;
 
   stack_->setPage(page);
 
   emit currentPageChanged(page);
 
-  if (! window_->area()->isExpanded())
-    window_->area()->expandSlot();
+  if (! window()->area()->isExpanded())
+    window()->area()->expandSlot();
 }
 
 void
 CQPaletteGroup::
 pressTabIndex(int /*ind*/)
 {
-  if (window_->area()->isExpanded())
-    window_->area()->collapseSlot();
-  else
-    window_->area()->expandSlot();
+  window()->toggleExpandSlot();
+}
+
+void
+CQPaletteGroup::
+tabMovePageSlot(const QString &fromName, int fromIndex, const QString &toName, int toIndex)
+{
+  CQPaletteGroup *group1 = CQPaletteGroupMgrInst->getGroupFromTabBar(fromName);
+  CQPaletteGroup *group2 = CQPaletteGroupMgrInst->getGroupFromTabBar(toName);
+
+  assert(group2 == this);
+
+  CQPaletteAreaPage *page1 = group1->getPageForIndex(fromIndex);
+//CQPaletteAreaPage *page2 = group2->getPageForIndex(toIndex);
+
+  if (page1->allowedAreas() & group2->window()->dockArea())
+    group1->window()->movePage(page1, group2->window());
+}
+
+CQPaletteAreaPage *
+CQPaletteGroup::
+getPageForIndex(int ind) const
+{
+  uint id = tabbar_->getPageId(ind);
+
+  Pages::const_iterator p = pages_.find(id);
+
+  if (p == pages_.end())
+    return 0;
+
+  return (*p).second;
 }
 
 void
@@ -425,10 +549,22 @@ CQPaletteGroupStack(QWidget *parent) :
   setObjectName("stack");
 }
 
+CQPaletteGroupStack::
+~CQPaletteGroupStack()
+{
+  while (count())
+    removeWidget(widget(0));
+}
+
 void
 CQPaletteGroupStack::
 addPage(CQPaletteAreaPage *page)
 {
+  QWidget *pw = parentWidget();
+  QWidget *cw = page->widget()->parentWidget();
+
+  assert(pw != cw);
+
   addWidget(page->widget());
 }
 
@@ -437,6 +573,8 @@ CQPaletteGroupStack::
 removePage(CQPaletteAreaPage *page)
 {
   removeWidget(page->widget());
+
+  page->widget()->setParent(0);
 }
 
 void
@@ -452,11 +590,19 @@ uint CQPaletteAreaPage::lastId_ = 0;
 
 CQPaletteAreaPage::
 CQPaletteAreaPage(QWidget *w) :
- w_(w), hidden_(false), resizable_(true), fixedSize_(100,100)
+ w_(w), dockArea_(Qt::NoDockWidgetArea), hidden_(false), fixedWidth_(100), fixedHeight_(100),
+ widthResizable_(true), heightResizable_(true)
 {
   setObjectName("page");
 
   id_ = ++lastId_;
+}
+
+void
+CQPaletteAreaPage::
+setWidget(QWidget *w)
+{
+  w_ = w;
 }
 
 // get page min/max width
@@ -464,7 +610,7 @@ void
 CQPaletteAreaPage::
 getMinMaxWidth(int &min_w, int &max_w) const
 {
-  if (resizable()) {
+  if (widthResizable()) {
     QWidget *w = const_cast<CQPaletteAreaPage *>(this)->widget();
 
     QSize s = CQWidgetUtil::SmartMinSize(w);
@@ -473,7 +619,7 @@ getMinMaxWidth(int &min_w, int &max_w) const
     max_w = w->maximumWidth();
   }
   else {
-    min_w = fixedSize_.width();
+    min_w = fixedWidth_;
     max_w = min_w;
   }
 }
@@ -483,7 +629,7 @@ void
 CQPaletteAreaPage::
 getMinMaxHeight(int &min_h, int &max_h) const
 {
-  if (resizable()) {
+  if (heightResizable()) {
     QWidget *w = const_cast<CQPaletteAreaPage *>(this)->widget();
 
     QSize s = CQWidgetUtil::SmartMinSize(w);
@@ -492,7 +638,7 @@ getMinMaxHeight(int &min_h, int &max_h) const
     max_h = w->maximumHeight();
   }
   else {
-    min_h = fixedSize_.height();
+    min_h = fixedHeight_;
     max_h = min_h;
   }
 }

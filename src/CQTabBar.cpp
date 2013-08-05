@@ -10,6 +10,13 @@
 
 #include <cassert>
 
+namespace {
+static const char *dragId     = "CQTabBarDragId";
+static const char *mimeId     = "CQTabBarMimeId";
+static const char *mimeNameId = "CQTabBarMimeNameId";
+static const char *mimeTabId  = "CQTabBarMimeTabId";
+}
+
 // create tab bar
 CQTabBar::
 CQTabBar(QWidget *parent) :
@@ -815,8 +822,12 @@ mouseMoveEvent(QMouseEvent *e)
 
       QMimeData *mimeData = new QMimeData;
 
-      // a crude way to distinguish drags
-      mimeData->setData("action", "CQTabBarDrag") ;
+      // use unique id for our mime data and store source palette type
+      QString numStr = QString("%1").arg(pressIndex_);
+
+      mimeData->setData(mimeId    , dragId);
+      mimeData->setData(mimeNameId, objectName().toAscii());
+      mimeData->setData(mimeTabId , numStr.toAscii());
 
       drag->setMimeData(mimeData);
 
@@ -859,13 +870,34 @@ void
 CQTabBar::
 dragEnterEvent(QDragEnterEvent *event)
 {
-  // Only accept if it's our request
-  const QMimeData *m = event->mimeData();
+  QString name;
+  int     fromIndex;
 
-  QStringList formats = m->formats();
+  if (! dragValid(event->mimeData(), name, fromIndex)) {
+    event->ignore();
+    return;
+  }
 
-  if (formats.contains("action") && (m->data("action") == "CQTabBarDrag"))
+  event->acceptProposedAction();
+}
+
+// handle drag move
+void
+CQTabBar::
+dragMoveEvent(QDragMoveEvent *event)
+{
+  QString name;
+  int     fromIndex;
+
+  if (! dragValid(event->mimeData(), name, fromIndex)) {
+    event->ignore();
+    return;
+  }
+
+  if (dragPosValid(name, event->pos()))
     event->acceptProposedAction();
+  else
+    event->ignore();
 }
 
 // handle drop event
@@ -873,30 +905,92 @@ void
 CQTabBar::
 dropEvent(QDropEvent *event)
 {
-  // from icon at press position to icon at release position
-  int fromIndex = tabAt(pressPos_);
-  int toIndex   = tabAt(event->pos());
+  QString name;
+  int     fromIndex;
 
-  // skip invalid and do nothing drops
-  if (fromIndex < 0 || toIndex < 0 || fromIndex == toIndex)
+  if (! dragValid(event->mimeData(), name, fromIndex)) {
+    event->ignore();
+    return;
+  }
+
+  if (! dragPosValid(name, event->pos()))
     return;
 
-  int pos1 = tabButtonPos(fromIndex);
-  int pos2 = tabButtonPos(toIndex  );
+  // get index at release position
+  int toIndex = tabAt(event->pos());
 
-  CQTabBarButton *button1 = buttons_[pos1];
-  CQTabBarButton *button2 = buttons_[pos2];
+  if (name == objectName()) {
+    // skip invalid and do nothing drops
+    if (fromIndex < 0 || toIndex < 0 || fromIndex == toIndex)
+      return;
 
-  buttons_[pos1] = button1;
-  buttons_[pos2] = button2;
+    int pos1 = tabButtonPos(fromIndex);
+    int pos2 = tabButtonPos(toIndex  );
 
-  button1->setIndex(toIndex);
-  button2->setIndex(fromIndex);
+    CQTabBarButton *button1 = buttons_[pos1];
+    CQTabBarButton *button2 = buttons_[pos2];
 
-  if      (fromIndex == currentIndex()) setCurrentIndex(toIndex);
-  else if (toIndex   == currentIndex()) setCurrentIndex(fromIndex);
+    buttons_[pos2] = button1;
+    buttons_[pos1] = button2;
 
-  event->acceptProposedAction();
+    button1->setIndex(toIndex);
+    button2->setIndex(fromIndex);
+
+    if      (fromIndex == currentIndex()) setCurrentIndex(toIndex);
+    else if (toIndex   == currentIndex()) setCurrentIndex(fromIndex);
+
+    emit tabMoved(fromIndex, toIndex);
+
+    event->acceptProposedAction();
+  }
+  else {
+    emit tabMovePageSignal(name, fromIndex, this->objectName(), toIndex);
+
+    event->acceptProposedAction();
+  }
+}
+
+// is drag valid
+bool
+CQTabBar::
+dragValid(const QMimeData *m, QString &name, int &num) const
+{
+  // Only accept if it's our request
+  QStringList formats = m->formats();
+
+  if (! formats.contains(mimeId) || m->data(mimeId) != dragId)
+    return false;
+
+  assert(formats.contains(mimeTabId));
+  assert(formats.contains(mimeNameId));
+
+  name = m->data(mimeNameId).data();
+
+  QString numStr = m->data(mimeTabId).data();
+
+  bool ok;
+
+  num = numStr.toInt(&ok);
+
+  assert(ok);
+
+  return true;
+}
+
+// is drag position valid
+bool
+CQTabBar::
+dragPosValid(const QString &name, const QPoint &pos) const
+{
+  // drag in same tab bar must be to another tab
+  if (name == this->objectName()) {
+    int ind = tabAt(pos);
+
+    if (ind < 0)
+      return false;
+  }
+
+  return true;
 }
 
 // get tab at specified point

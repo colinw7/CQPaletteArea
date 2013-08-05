@@ -22,7 +22,36 @@
 #include "images/console.xpm"
 #include "images/mru.xpm"
 
-class TransformPage : public CQPaletteAreaPage {
+class PageWidget : public QWidget {
+ public:
+  PageWidget() { }
+ ~PageWidget() { }
+};
+
+class PageAction {
+ public:
+  PageAction() : action_(0) { }
+
+  virtual ~PageAction() { }
+
+  virtual QString title() const = 0;
+
+  QAction *createAction(QMenu *menu) {
+    action_ = new QAction(title(), menu);
+
+    action_->setCheckable(true);
+    action_->setChecked(true);
+
+    menu->addAction(action_);
+
+    return action_;
+  }
+
+ protected:
+  QAction *action_;
+};
+
+class TransformPage : public CQPaletteAreaPage, public PageAction {
  public:
   TransformPage();
 
@@ -33,9 +62,16 @@ class TransformPage : public CQPaletteAreaPage {
   Qt::DockWidgetAreas allowedAreas() const {
     return Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea;
   }
+
+  void setHidden(bool hidden) {
+    if (action_)
+      action_->setChecked(! hidden);
+
+    CQPaletteAreaPage::setHidden(hidden);
+  }
 };
 
-class PenPage : public CQPaletteAreaPage {
+class PenPage : public CQPaletteAreaPage, public PageAction {
  public:
   PenPage();
 
@@ -46,9 +82,15 @@ class PenPage : public CQPaletteAreaPage {
   Qt::DockWidgetAreas allowedAreas() const {
     return Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea;
   }
+
+  void setHidden(bool hidden) {
+    if (hidden) action_->setChecked(false);
+
+    CQPaletteAreaPage::setHidden(hidden);
+  }
 };
 
-class BrushPage : public CQPaletteAreaPage {
+class BrushPage : public CQPaletteAreaPage, public PageAction {
  public:
   BrushPage();
 
@@ -59,9 +101,15 @@ class BrushPage : public CQPaletteAreaPage {
   Qt::DockWidgetAreas allowedAreas() const {
     return Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea;
   }
+
+  void setHidden(bool hidden) {
+    if (hidden) action_->setChecked(false);
+
+    CQPaletteAreaPage::setHidden(hidden);
+  }
 };
 
-class ConsolePage : public CQPaletteAreaPage {
+class ConsolePage : public CQPaletteAreaPage, public PageAction {
  public:
   ConsolePage();
 
@@ -72,9 +120,15 @@ class ConsolePage : public CQPaletteAreaPage {
   Qt::DockWidgetAreas allowedAreas() const {
     return Qt::TopDockWidgetArea | Qt::BottomDockWidgetArea;
   }
+
+  void setHidden(bool hidden) {
+    if (hidden) action_->setChecked(false);
+
+    CQPaletteAreaPage::setHidden(hidden);
+  }
 };
 
-class MRUPage : public CQPaletteAreaPage {
+class MRUPage : public CQPaletteAreaPage, public PageAction {
  public:
   MRUPage();
 
@@ -83,7 +137,14 @@ class MRUPage : public CQPaletteAreaPage {
   QIcon   icon       () const { return QIcon(QPixmap((const char **) mru_data)); }
 
   Qt::DockWidgetAreas allowedAreas() const {
-    return Qt::TopDockWidgetArea | Qt::BottomDockWidgetArea;
+    return Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea |
+           Qt::TopDockWidgetArea | Qt::BottomDockWidgetArea;
+  }
+
+  void setHidden(bool hidden) {
+    if (hidden) action_->setChecked(false);
+
+    CQPaletteAreaPage::setHidden(hidden);
   }
 };
 
@@ -138,29 +199,11 @@ CQPaletteAreaTest() :
 
   QMenu *paletteMenu = menuBar()->addMenu("&Palette");
 
-  QAction *page1Action = new QAction("Transform", paletteMenu);
-  QAction *page2Action = new QAction("Pen"      , paletteMenu);
-  QAction *page3Action = new QAction("Brush"    , paletteMenu);
-  QAction *page4Action = new QAction("Console"  , paletteMenu);
-  QAction *page5Action = new QAction("MRU"      , paletteMenu);
-
-  page1Action->setCheckable(true);
-  page2Action->setCheckable(true);
-  page3Action->setCheckable(true);
-  page4Action->setCheckable(true);
-  page5Action->setCheckable(true);
-
-  page1Action->setChecked(true);
-  page2Action->setChecked(true);
-  page3Action->setChecked(true);
-  page4Action->setChecked(true);
-  page5Action->setChecked(true);
-
-  paletteMenu->addAction(page1Action);
-  paletteMenu->addAction(page2Action);
-  paletteMenu->addAction(page3Action);
-  paletteMenu->addAction(page4Action);
-  paletteMenu->addAction(page5Action);
+  QAction *page1Action = transformPage_->createAction(paletteMenu);
+  QAction *page2Action = penPage_      ->createAction(paletteMenu);
+  QAction *page3Action = brushPage_    ->createAction(paletteMenu);
+  QAction *page4Action = consolePage_  ->createAction(paletteMenu);
+  QAction *page5Action = mruPage_      ->createAction(paletteMenu);
 
   connect(page1Action, SIGNAL(triggered(bool)), this, SLOT(transformSlot(bool)));
   connect(page2Action, SIGNAL(triggered(bool)), this, SLOT(penSlot(bool)));
@@ -278,7 +321,7 @@ widgetName(QWidget *w)
 
 TransformPage::
 TransformPage() :
- CQPaletteAreaPage(new QWidget)
+ CQPaletteAreaPage(new PageWidget)
 {
   QWidget *w = widget();
 
@@ -297,7 +340,7 @@ TransformPage() :
 
 PenPage::
 PenPage() :
- CQPaletteAreaPage(new QWidget)
+ CQPaletteAreaPage(new PageWidget)
 {
   QWidget *w = widget();
 
@@ -316,7 +359,7 @@ PenPage() :
 
 BrushPage::
 BrushPage() :
- CQPaletteAreaPage(new QWidget)
+ CQPaletteAreaPage(new PageWidget)
 {
   QWidget *w = widget();
 
@@ -345,7 +388,7 @@ BrushPage() :
 
 ConsolePage::
 ConsolePage() :
- CQPaletteAreaPage(new QWidget)
+ CQPaletteAreaPage(new PageWidget)
 {
   QWidget *w = widget();
 
@@ -363,7 +406,7 @@ ConsolePage() :
 
 MRUPage::
 MRUPage() :
- CQPaletteAreaPage(new QWidget)
+ CQPaletteAreaPage(new PageWidget)
 {
   QWidget *w = widget();
 
@@ -421,6 +464,9 @@ MRUPage() :
   //setPageHeight(tab->sizeHint().height() + 32);
 
   //setSizeType(SIZE_FIXED);
+  int height = tab->height() + page1->height() + 16;
+
+  setFixedHeight(height);
 }
 
 //------

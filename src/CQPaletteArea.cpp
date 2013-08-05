@@ -17,11 +17,14 @@
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include <QMenu>
+#include <QTimer>
 #include <cassert>
 #include <iostream>
 
 #include <pin.xpm>
 #include <unpin.xpm>
+#include <left_triangle.xpm>
+#include <right_triangle.xpm>
 
 namespace Constants {
   int             splitter_tol  = 8;
@@ -42,18 +45,16 @@ CQPaletteAreaMgr(QMainWindow *window) :
     Qt::TopDockWidgetArea , Qt::BottomDockWidgetArea
   };
 
-  QString dockAreaNames[] = { "leftArea", "rightArea", "topArea", "bottomArea" };
-
   for (int i = 0; i < 4; ++i) {
     Qt::DockWidgetArea dockArea = dockAreas[i];
 
     CQPaletteArea *area = new CQPaletteArea(this, dockArea);
 
-    area->setObjectName(dockAreaNames[i]);
+    area->setObjectName(dockAreaName(dockArea));
 
-    palettes_[dockArea] = area;
+    palettes_[dockArea].push_back(area);
 
-    area->hide();
+    area->setVisible(false);
   }
 
   rubberBand_ = new CQRubberBand;
@@ -64,22 +65,83 @@ CQPaletteAreaMgr(QMainWindow *window) :
 CQPaletteAreaMgr::
 ~CQPaletteAreaMgr()
 {
-  for (Palettes::const_iterator p = palettes_.begin(); p != palettes_.end(); ++p)
-    delete (*p).second;
+  for (Palettes::iterator p = palettes_.begin(); p != palettes_.end(); ++p) {
+    Areas &areas = (*p).second;
+
+    for (Areas::iterator pa = areas.begin(); pa != areas.end(); ++pa)
+      delete *pa;
+  }
 
   delete rubberBand_;
+}
+
+QString
+CQPaletteAreaMgr::
+dockAreaName(Qt::DockWidgetArea area) const
+{
+  switch (area) {
+    case Qt::LeftDockWidgetArea  : return "leftArea";
+    case Qt::RightDockWidgetArea : return "rightArea";
+    case Qt::TopDockWidgetArea   : return "topArea";
+    case Qt::BottomDockWidgetArea: return "bottomArea";
+    default                      : return "noArea";
+  }
+}
+
+CQPaletteArea *
+CQPaletteAreaMgr::
+getArea(Qt::DockWidgetArea dockArea)
+{
+  Areas &areas = palettes_[dockArea];
+
+  for (Areas::iterator pa = areas.begin(); pa != areas.end(); ++pa) {
+    if ((*pa)->isDetached()) continue;
+
+    return *pa;
+  }
+
+  CQPaletteArea *area = new CQPaletteArea(this, dockArea);
+
+  area->setObjectName(dockAreaName(dockArea));
+
+  palettes_[dockArea].push_back(area);
+
+  area->setVisible(false);
+
+  return area;
+}
+
+void
+CQPaletteAreaMgr::
+deleteArea(CQPaletteArea *area)
+{
+  Areas &areas = palettes_[area->dockArea()];
+
+  uint pos = 0;
+
+  for ( ; pos < areas.size(); ++pos)
+    if (areas[pos] == area)
+      break;
+
+  assert(pos < areas.size());
+
+  for (int i = pos + 1; i < areas.size(); ++i)
+    areas[i - 1] = areas[i];
+
+  areas.pop_back();
+
+  area->setVisible(false);
+
+  area->deleteLater();
 }
 
 void
 CQPaletteAreaMgr::
 addPage(CQPaletteAreaPage *page, Qt::DockWidgetArea dockArea)
 {
-  CQPaletteWindow *window = palettes_[dockArea]->getWindow();
+  CQPaletteArea *area = getArea(dockArea);
 
-  if (! window)
-    window = palettes_[dockArea]->addWindow();
-
-  window->addPage(page);
+  area->addPage(page);
 }
 
 void
@@ -100,12 +162,19 @@ CQPaletteAreaMgr::
 showExpandedPage(CQPaletteAreaPage *page)
 {
   CQPaletteGroup *group = page->group();
-  assert(group);
+
+  if (! group) {
+    addPage(page, page->dockArea());
+
+    group = page->group();
+  }
 
   CQPaletteWindow *window = group->window();
   assert(window);
 
   window->showPage(page);
+
+  window->setCurrentPage(page);
 }
 
 void
@@ -113,7 +182,12 @@ CQPaletteAreaMgr::
 hidePage(CQPaletteAreaPage *page)
 {
   CQPaletteGroup *group = page->group();
-  assert(group);
+
+  if (! group) {
+    addPage(page, page->dockArea());
+
+    group = page->group();
+  }
 
   CQPaletteWindow *window = group->window();
   assert(window);
@@ -125,7 +199,9 @@ CQPaletteWindow *
 CQPaletteAreaMgr::
 addWindow(Qt::DockWidgetArea dockArea)
 {
-  return palettes_[dockArea]->addWindow();
+  CQPaletteArea *area = getArea(dockArea);
+
+  return area->addWindow();
 }
 
 void
@@ -135,17 +211,7 @@ removeWindow(CQPaletteWindow *window)
   CQPaletteArea *area = window->area();
 
   if (area)
-    palettes_[area->dockArea()]->removeWindow(window);
-}
-
-CQPaletteArea *
-CQPaletteAreaMgr::
-getArea(Qt::DockWidgetArea area) const
-{
-  Palettes::const_iterator p = palettes_.find(area);
-  assert(p != palettes_.end());
-
-  return (*p).second;
+    area->removeWindow(window);
 }
 
 CQPaletteArea *
@@ -153,15 +219,45 @@ CQPaletteAreaMgr::
 getAreaAt(const QPoint &pos, Qt::DockWidgetAreas allowedAreas) const
 {
   for (Palettes::const_iterator p = palettes_.begin(); p != palettes_.end(); ++p) {
-    CQPaletteArea *area = (*p).second;
+    Qt::DockWidgetArea  dockArea = (*p).first;
+    const Areas        &areas    = (*p).second;
 
-    if (! (area->dockArea() & allowedAreas))
-      continue;
+    // ensure we have an attach dock area
+    bool hasAttached = false;
 
-    QRect rect = area->getHighlightRect();
+    for (Areas::const_iterator pa = areas.begin(); pa != areas.end(); ++pa) {
+      CQPaletteArea *area = *pa;
 
-    if (rect.contains(pos))
-      return area;
+      if (! area->isDetached())
+        hasAttached = true;
+    }
+
+    if (! hasAttached) {
+      CQPaletteAreaMgr *th = const_cast<CQPaletteAreaMgr *>(this);
+
+      CQPaletteArea *area = new CQPaletteArea(th, dockArea);
+
+      area->setObjectName(dockAreaName(dockArea));
+
+      th->palettes_[dockArea].push_back(area);
+
+      area->setVisible(false);
+    }
+
+    // check all areas
+    for (Areas::const_iterator pa = areas.begin(); pa != areas.end(); ++pa) {
+      CQPaletteArea *area = *pa;
+
+      if (area->isDetached() && ! area->isVisible()) continue;
+
+      if (! (area->dockArea() & allowedAreas))
+        continue;
+
+      QRect rect = area->getHighlightRect();
+
+      if (rect.contains(pos))
+        return area;
+    }
   }
 
   return 0;
@@ -171,21 +267,43 @@ void
 CQPaletteAreaMgr::
 swapAreas(CQPaletteArea *area1, CQPaletteArea *area2)
 {
+  // get dock area, name, and array position for each area
   Qt::DockWidgetArea dockArea1 = area1->dockArea();
   Qt::DockWidgetArea dockArea2 = area2->dockArea();
 
   QString name1 = area1->objectName();
   QString name2 = area2->objectName();
 
+  Areas &areas1 = palettes_[dockArea1];
+  Areas &areas2 = palettes_[dockArea2];
+
+  uint pos1 = 0, pos2 = 0;
+
+  for ( ; pos1 < areas1.size(); ++pos1)
+    if (areas1[pos1] == area1)
+      break;
+
+  for ( ; pos2 < areas2.size(); ++pos2)
+    if (areas2[pos2] == area2)
+      break;
+
+  assert(pos1 < areas1.size() && pos2 < areas2.size());
+
+  //---
+
+  // swap values
   area1->setDockArea(dockArea2);
   area2->setDockArea(dockArea1);
 
   area1->setObjectName(name2);
   area2->setObjectName(name1);
 
-  palettes_[area1->dockArea()] = area1;
-  palettes_[area2->dockArea()] = area2;
+  palettes_[dockArea1][pos1] = area2;
+  palettes_[dockArea2][pos2] = area1;
 
+  //---
+
+  // re-add to main window to make visible
   window()->addDockWidget(area1->dockArea(), area1);
   window()->addDockWidget(area2->dockArea(), area2);
 
@@ -213,10 +331,12 @@ clearHighlight()
 
 //------
 
+int CQPaletteArea::windowId_ = 1;
+
 CQPaletteArea::
 CQPaletteArea(CQPaletteAreaMgr *mgr, Qt::DockWidgetArea dockArea) :
- CQDockArea(mgr->window()), mgr_(mgr), expanded_(true),
- pinned_(true), floating_(false), detached_(false)
+ CQDockArea(mgr->window()), mgr_(mgr), visible_(true),
+ expanded_(true), pinned_(true), floating_(false), detached_(false)
 {
   setObjectName("area");
 
@@ -277,19 +397,20 @@ CQPaletteArea::
 
 CQPaletteWindow *
 CQPaletteArea::
-getWindow(int i)
+getDockedWindow()
 {
-  if (i < 0 || i >= int(windows_.size()))
-    return 0;
+  for (uint i = 0; i < numWindows(); ++i)
+    if (! windows_[i]->isDetached())
+      return windows_[i];
 
-  return windows_[i];
+  return 0;
 }
 
 CQPaletteWindow *
 CQPaletteArea::
 addWindow()
 {
-  CQPaletteWindow *window = new CQPaletteWindow(this);
+  CQPaletteWindow *window = new CQPaletteWindow(this, windowId_++);
 
   addWindow(window);
 
@@ -302,19 +423,21 @@ addWindow(CQPaletteWindow *window)
 {
   window->setArea(this);
 
-  window->show();
+  window->setVisible(true);
+  window->setDetached(false);
+  window->setFloating(false);
 
-  splitter_->addWidget(window);
+  splitter()->addWidget(window);
 
   updateSplitterSizes();
 
-  for (uint i = 0; i < windows_.size(); ++i)
+  for (uint i = 0; i < numWindows(); ++i)
     if (windows_[i] == window)
       assert(false);
 
   windows_.push_back(window);
 
-  show();
+  setVisible(true);
 
   updateSize();
 }
@@ -329,11 +452,11 @@ addWindowAtPos(CQPaletteWindow *window, const QPoint &gpos)
 
   int pos = -1;
 
-  int n = splitter_->count();
+  int n = splitter()->count();
 
   if      (isVerticalDockArea()) {
     for (int i = 0; i < n; ++i) {
-      QWidget *widget = splitter_->widget(i);
+      QWidget *widget = splitter()->widget(i);
 
       int y = widget->mapFromGlobal(gpos).y();
       int h = widget->height();
@@ -354,6 +477,8 @@ addWindowAtPos(CQPaletteWindow *window, const QPoint &gpos)
         for (int j = 0; j < numPages; ++j)
           window1->addPage(window->group()->getPage(j));
 
+        window1->setCurrentPage(window->group()->getPage(0));
+
         window->deleteLater();
 
         return;
@@ -362,7 +487,7 @@ addWindowAtPos(CQPaletteWindow *window, const QPoint &gpos)
   }
   else if (isHorizontalDockArea()) {
     for (int i = 0; i < n; ++i) {
-      QWidget *widget = splitter_->widget(i);
+      QWidget *widget = splitter()->widget(i);
 
       int x = widget->mapFromGlobal(gpos).x();
       int w = widget->width();
@@ -390,18 +515,20 @@ addWindowAtPos(CQPaletteWindow *window, const QPoint &gpos)
     }
   }
 
-  window->show();
+  window->setVisible(true);
+  window->setDetached(false);
+  window->setFloating(false);
 
   if (pos != -1)
-    splitter_->insertWidget(pos, window);
+    splitter()->insertWidget(pos, window);
   else
-    splitter_->addWidget(window);
+    splitter()->addWidget(window);
 
   updateSplitterSizes();
 
   windows_.push_back(window);
 
-  show();
+  setVisible(true);
 
   updateSize();
 }
@@ -412,7 +539,7 @@ removeWindow(CQPaletteWindow *window)
 {
   int ind = -1;
 
-  int nw = windows_.size();
+  int nw = numWindows();
 
   for (int i = 0; i < nw; ++i) {
     if (ind < 0)
@@ -424,7 +551,7 @@ removeWindow(CQPaletteWindow *window)
   windows_.pop_back();
 
   // remove from splitter
-  window->hide();
+  window->setVisible(false);
 
   window->setParent(0);
 
@@ -433,16 +560,61 @@ removeWindow(CQPaletteWindow *window)
   updateSize();
 }
 
+uint
+CQPaletteArea::
+numVisibleWindows() const
+{
+  uint num = 0;
+
+  for (Windows::const_iterator p = windows_.begin(); p != windows_.end(); ++p) {
+    CQPaletteWindow *window = *p;
+
+    if (! window->isVisible() || window->isDetached())
+      continue;
+
+    ++num;
+  }
+
+  return num;
+}
+
+void
+CQPaletteArea::
+setVisible(bool visible)
+{
+  if (visible_ == visible)
+    return;
+
+  visible_ = visible;
+
+  CQDockArea::setVisible(visible);
+}
+
+void
+CQPaletteArea::
+addPage(CQPaletteAreaPage *page, bool current)
+{
+  CQPaletteWindow *window = getDockedWindow();
+
+  if (! window)
+    window = addWindow();
+
+  window->addPage(page);
+
+  if (current)
+    window->setCurrentPage(page);
+}
+
 void
 CQPaletteArea::
 updateSplitterSizes()
 {
   QList<int> sizes;
 
-  int n = splitter_->count();
+  int n = splitter()->count();
 
   if      (isVerticalDockArea()) {
-    int h = splitter_->height();
+    int h = splitter()->height();
 
     for (int i = 0; i < n; ++ i) {
       int h1 = h/(n - i);
@@ -453,7 +625,7 @@ updateSplitterSizes()
     }
   }
   else if (isHorizontalDockArea()) {
-    int w = splitter_->width();
+    int w = splitter()->width();
 
     for (int i = 0; i < n; ++ i) {
       int w1 = w/(n - i);
@@ -464,7 +636,7 @@ updateSplitterSizes()
     }
   }
 
-  splitter_->setSizes(sizes);
+  splitter()->setSizes(sizes);
 }
 
 void
@@ -506,9 +678,9 @@ updateDockArea()
   title_->updateDockArea();
 
   if      (isVerticalDockArea())
-    splitter_->setOrientation(Qt::Vertical);
+    splitter()->setOrientation(Qt::Vertical);
   else if (isHorizontalDockArea())
-    splitter_->setOrientation(Qt::Horizontal);
+    splitter()->setOrientation(Qt::Horizontal);
 
   for (Windows::iterator p = windows_.begin(); p != windows_.end(); ++p) {
     CQPaletteWindow *window = *p;
@@ -620,9 +792,9 @@ attachSlot()
 {
   if (! detached_) return;
 
-  mgr_->window()->addDockWidget(dockArea(), this);
-
   setDetached(false);
+
+  mgr_->window()->addDockWidget(dockArea(), this);
 }
 
 void
@@ -633,13 +805,9 @@ detachSlot()
 
   setDetached(true);
 
-  setParent(0, Constants::detachedFlags);
-
   int detachPos = getDetachPos(width(), height());
 
   move(detachPos, detachPos);
-
-  show();
 }
 
 void
@@ -714,6 +882,16 @@ setDetached(bool detached)
 
   detached_ = detached;
 
+  if (detached_)
+    setParent(0, Constants::detachedFlags);
+  else
+    setParent(0, Constants::normalFlags);
+
+  setVisible(true);
+
+  if (! detached_)
+    setFloating(false);
+
   resizer_->setActive(detached_);
 
   title_->updateState();
@@ -756,12 +934,15 @@ setFloated(bool floating, const QPoint &pos, bool /*dragAll*/)
 
     allowedAreas_ = calcAllowedAreas();
   }
-  else
+  else {
+    setParent(0, Constants::normalFlags);
+
     mgr_->window()->addDockWidget(dockArea(), this);
+  }
 
   setFloating(floating);
 
-  show();
+  setVisible(true);
 }
 
 Qt::DockWidgetAreas
@@ -785,17 +966,20 @@ void
 CQPaletteArea::
 cancelFloating()
 {
-  mgr_->window()->addDockWidget(dockArea(), this);
+  if (! isDetached()) {
+    setParent(0, Constants::normalFlags);
 
-  setFloating(false);
-  setDetached(false);
+    mgr_->window()->addDockWidget(dockArea(), this);
+
+    setFloating(false);
+  }
 }
 
 void
 CQPaletteArea::
 animateDrop(const QPoint &p)
 {
-  CQPaletteArea *area = mgr_->getAreaAt(p, allowedAreas_);
+  CQPaletteArea *area = mgr_->getAreaAt(p, allowedAreas());
 
   if (area)
     mgr_->highlightArea(area, p);
@@ -831,12 +1015,14 @@ execDrop(const QPoint &gpos, bool floating)
 
         mgr_->window()->addDockWidget(area->dockArea(), area);
 
-        hide();
+        if (! isDetached())
+          setVisible(false);
+        else
+          mgr_->deleteArea(this);
       }
     }
-    else {
+    else
       mgr_->window()->addDockWidget(area->dockArea(), area);
-    }
   }
   else {
     setFloating(false);
@@ -865,8 +1051,8 @@ getHighlightRectAtPos(const QPoint &gpos) const
   QRect    rect;
   QWidget *widget = 0;
 
-  for (int i = 0; i < splitter_->count(); ++i) {
-    widget = splitter_->widget(i);
+  for (int i = 0; i < splitter()->count(); ++i) {
+    widget = splitter()->widget(i);
 
     int w = std::max(widget->width (), 2*tol);
     int h = std::max(widget->height(), 2*tol);
@@ -885,6 +1071,8 @@ getHighlightRectAtPos(const QPoint &gpos) const
       else if (x >  w - tol && x <  w + tol) { rect = QRect(w - tol, 0,     2*tol, h); break; }
       else if (x >=     tol && x <= w - tol) { rect = QRect(tol    , 0, w - 2*tol, h); break; }
     }
+
+    widget = 0;
   }
 
   if (! widget)
@@ -903,16 +1091,19 @@ getHighlightRect() const
 {
   int tol = Constants::splitter_tol;
 
+  // main window geometry
   QRect wrect = mgr_->window()->geometry();
 
   int dx = wrect.left();
   int dy = wrect.top ();
 
+  // main window central widget geometry
   QRect crect = mgr_->window()->centralWidget()->geometry();
 
   QRect rect;
 
-  if (! isFloating() && ! windows_.empty()) {
+  // visible docked area
+  if (! isFloating() && numVisibleWindows() != 0) {
     rect = geometry();
 
     if (! isDetached())
@@ -924,11 +1115,12 @@ getHighlightRect() const
       if (rect.width() < 2*tol) rect.setWidth(2*tol);
     }
     else if (isHorizontalDockArea()) {
-      rect.setWidth(crect.height());
+      rect.setWidth(wrect.height());
 
       if (rect.height() < 2*tol) rect.setHeight(2*tol);
     }
   }
+  // floating or empty area
   else {
     // left/right are the height of the central widget and to the side of it
     if      (isVerticalDockArea()) {
@@ -975,15 +1167,20 @@ dockAt(Qt::DockWidgetArea dockArea)
     for (Windows::iterator p = windows.begin(); p != windows.end(); ++p) {
       CQPaletteWindow *window = *p;
 
-      removeWindow(window);
+      this->removeWindow(window);
 
       area->addWindow(window);
     }
 
     mgr_->window()->addDockWidget(area->dockArea(), area);
 
-    hide();
+    if (! isDetached())
+      setVisible(false);
+    else
+      mgr_->deleteArea(this);
   }
+
+  title_->updateState();
 }
 
 // get position of detached area
@@ -1019,15 +1216,37 @@ void
 CQPaletteArea::
 updateSize()
 {
-  if (windows_.empty())
-    hide();
+  if (numVisibleWindows() == 0)
+    setVisible(false);
   else {
+    setVisible(true);
+
     QSize s = sizeHint();
 
-    if      (isVerticalDockArea())
-      setDockWidth (s.width ());
-    else if (isHorizontalDockArea())
-      setDockHeight(s.height());
+    if      (isVerticalDockArea()) {
+      int min_w, max_w;
+
+      getDockMinMaxWidth(min_w, max_w);
+
+      bool fixed = (min_w == max_w);
+
+      if (fixed)
+        setDockWidth(min_w, true);
+      else
+        setDockWidth(s.width(), false);
+    }
+    else if (isHorizontalDockArea()) {
+      int min_h, max_h;
+
+      getDockMinMaxHeight(min_h, max_h);
+
+      bool fixed = (min_h == max_h);
+
+      if (fixed)
+        setDockHeight(min_h, true);
+      else
+        setDockHeight(s.height(), false);
+    }
   }
 }
 
@@ -1067,7 +1286,7 @@ updateSizeConstraints()
 {
   if (isFixed()) return;
 
-  assert(isExpanded());
+  if (! isExpanded()) return;
 
   if      (isVerticalDockArea()) {
     int min_w, max_w;
@@ -1102,7 +1321,7 @@ getDockMinMaxWidth(int &min_w, int &max_w) const
 
     page->getMinMaxWidth(min_w1, max_w1);
 
-    if (! page->resizable()) {
+    if (! page->widthResizable()) {
       min_w = min_w1;
       max_w = max_w1;
 
@@ -1131,7 +1350,7 @@ getDockMinMaxHeight(int &min_h, int &max_h) const
 
     page->getMinMaxHeight(min_h1, max_h1);
 
-    if (! page->resizable()) {
+    if (! page->heightResizable()) {
       min_h = min_h1;
       max_h = max_h1;
 
@@ -1171,16 +1390,23 @@ sizeHint() const
 //------
 
 CQPaletteWindow::
-CQPaletteWindow(CQPaletteArea *area) :
- mgr_(area->mgr()), area_(area), parent_(0), floating_(false), detached_(false)
+CQPaletteWindow(CQPaletteArea *area, uint id) :
+ mgr_(area->mgr()), area_(area), id_(id), parent_(0),
+ visible_(true), expanded_(true), floating_(false), detached_(false)
 {
-  setObjectName("window");
+  setObjectName(QString("window_%1").arg(id_));
+
+  setFrameStyle(QFrame::NoFrame | QFrame::Plain);
+  setLineWidth(2);
 
   QGridLayout *layout = new QGridLayout(this);
   layout->setMargin(0); layout->setSpacing(0);
 
   title_ = new CQPaletteWindowTitle(this);
-  group_ = new CQPaletteGroup(this);
+  group_ = CQPaletteGroupMgrInst->createGroup(this);
+
+  group_->setObjectName(QString("group_%1").arg(id_));
+  group_->tabbar()->setObjectName(QString("tabbar_%1").arg(id_));
 
   layout->addWidget(title_, 0, 0);
   layout->addWidget(group_, 1, 0);
@@ -1192,6 +1418,11 @@ CQPaletteWindow(CQPaletteArea *area) :
 
   resizer_->setMovingEnabled(false);
   resizer_->setActive(false);
+}
+
+CQPaletteWindow::
+~CQPaletteWindow()
+{
 }
 
 void
@@ -1207,6 +1438,13 @@ setArea(CQPaletteArea *area)
   updateLayout();
 
   updateDockArea();
+}
+
+Qt::DockWidgetArea
+CQPaletteWindow::
+dockArea() const
+{
+  return area_->dockArea();
 }
 
 void
@@ -1242,8 +1480,11 @@ showPage(CQPaletteAreaPage *page)
 {
   group_->showPage(page);
 
-  if (group_->numPages() > 0)
+  if (group_->numPages() > 0) {
     setVisible(true);
+
+    area_->updateSize();
+  }
 }
 
 void
@@ -1252,8 +1493,35 @@ hidePage(CQPaletteAreaPage *page)
 {
   group_->hidePage(page);
 
-  if (group_->numPages() == 0)
+  if (group_->numPages() == 0) {
     setVisible(false);
+
+    area_->updateSize();
+  }
+}
+
+void
+CQPaletteWindow::
+movePage(CQPaletteAreaPage *page, CQPaletteWindow *newWindow)
+{
+  group_->removePage(page);
+
+  newWindow->group_->addPage(page);
+
+  newWindow->group_->setCurrentPage(page);
+
+  if (! group_->numPages()) {
+    area_->removeWindow(this);
+
+    QTimer::singleShot(10, this, SLOT(deleteLaterSlot()));
+  }
+}
+
+void
+CQPaletteWindow::
+deleteLaterSlot()
+{
+  this->deleteLater();
 }
 
 CQPaletteAreaPage *
@@ -1268,6 +1536,15 @@ CQPaletteWindow::
 setCurrentPage(CQPaletteAreaPage *page)
 {
   group_->setCurrentPage(page);
+}
+
+void
+CQPaletteWindow::
+setVisible(bool visible)
+{
+  visible_ = visible;
+
+  QFrame::setVisible(visible);
 }
 
 void
@@ -1311,18 +1588,6 @@ CQPaletteWindow::
 dockHeight() const
 {
   return group_->tabbar()->height();
-}
-
-void
-CQPaletteWindow::
-expand()
-{
-}
-
-void
-CQPaletteWindow::
-collapse()
-{
 }
 
 QString
@@ -1381,7 +1646,26 @@ setDetached(bool detached)
 
   detached_ = detached;
 
+  if (detached_)
+    setParent(0, Constants::detachedFlags);
+  else
+    setParent(0, Constants::normalFlags);
+
+  setVisible(true);
+
+  if (! detached)
+    setFloating(false);
+
+  if (detached_)
+    setFrameStyle(QFrame::Panel | QFrame::Raised);
+  else
+    setFrameStyle(QFrame::NoFrame | QFrame::Plain);
+
+  title_->updateState();
+
   resizer_->setActive(detached_);
+
+  updateDetachSize();
 }
 
 // update floating state
@@ -1411,7 +1695,9 @@ setFloated(bool floating, const QPoint &pos, bool dragAll)
       allowedAreas_ = currentPage->allowedAreas();
 
     if (! dragAll && pages.size() > 1) {
-      newWindow_ = mgr_->addWindow(area_->dockArea());
+      QSize saveSize = this->size();
+
+      newWindow_ = area_->addWindow();
 
       parentPos_ = group_->currentIndex();
 
@@ -1422,6 +1708,10 @@ setFloated(bool floating, const QPoint &pos, bool dragAll)
 
         newWindow_->addPage(pages[i]);
       }
+
+      area_->updateSize();
+
+      resize(saveSize);
     }
     else {
       newWindow_ = 0;
@@ -1441,14 +1731,18 @@ setFloated(bool floating, const QPoint &pos, bool dragAll)
 
       move(detachPos, detachPos);
     }
+
+    if (newWindow_ == 0)
+      area_->updateSize();
   }
-  else
-    setParent(parent_, Constants::normalFlags);
+  else {
+    if (! isDetached())
+      setParent(area_, Constants::normalFlags);
+  }
 
   setFloating(floating);
-  setDetached(false);
 
-  show();
+  setVisible(true);
 }
 
 void
@@ -1466,13 +1760,15 @@ cancelFloating()
 
     newWindow_->setCurrentPage(currentPage);
 
-    mgr_->removeWindow(this);
+    area_->removeWindow(this);
 
     this->deleteLater();
   }
 
+  if (! isDetached())
+    setParent(area_, Constants::normalFlags);
+
   setFloating(false);
-  setDetached(false);
 }
 
 void
@@ -1494,7 +1790,8 @@ execDrop(const QPoint &gpos, bool floating)
   CQPaletteArea *area = mgr_->getAreaAt(gpos, allowedAreas());
 
   if (area) {
-    setFloated(false);
+    setDetached(false);
+    setFloating(false);
 
     area_->removeWindow(this);
 
@@ -1502,14 +1799,14 @@ execDrop(const QPoint &gpos, bool floating)
 
     if (! area->isDetached())
       mgr_->window()->addDockWidget(area->dockArea(), area);
+
+    area->updateSize();
   }
   else {
     setFloating(false);
     setDetached(true);
 
-    setParent(0, Constants::detachedFlags);
-
-    show();
+    setVisible(true);
   }
 
   clearDrop();
@@ -1522,32 +1819,119 @@ clearDrop()
   mgr_->clearHighlight();
 }
 
+Qt::DockWidgetAreas
+CQPaletteWindow::
+calcAllowedAreas() const
+{
+  Qt::DockWidgetAreas allowedAreas = Qt::AllDockWidgetAreas;
+
+  CQPaletteGroup::PageArray pages = getPages();
+
+  for (CQPaletteGroup::PageArray::const_iterator p = pages.begin(); p != pages.end(); ++p) {
+    CQPaletteAreaPage *page = *p;
+
+    allowedAreas &= page->allowedAreas();
+  }
+
+  return allowedAreas;
+}
+
+void
+CQPaletteWindow::
+dockAt(Qt::DockWidgetArea dockArea)
+{
+  CQPaletteArea *area = mgr_->getArea(dockArea);
+
+  CQPaletteAreaPage *page = this->currentPage();
+  if (! page) return;
+
+  removePage(page);
+
+  area->addPage(page, true);
+}
+
 void
 CQPaletteWindow::
 dockLeftSlot()
 {
-  //dockAt(Qt::LeftDockWidgetArea);
+  dockAt(Qt::LeftDockWidgetArea);
 }
 
 void
 CQPaletteWindow::
 dockRightSlot()
 {
-  //dockAt(Qt::RightDockWidgetArea);
+  dockAt(Qt::RightDockWidgetArea);
 }
 
 void
 CQPaletteWindow::
 dockTopSlot()
 {
-  //dockAt(Qt::TopDockWidgetArea);
+  dockAt(Qt::TopDockWidgetArea);
 }
 
 void
 CQPaletteWindow::
 dockBottomSlot()
 {
-  //dockAt(Qt::BottomDockWidgetArea);
+  dockAt(Qt::BottomDockWidgetArea);
+}
+
+void
+CQPaletteWindow::
+toggleExpandSlot()
+{
+  if (! isDetached()) {
+    if (area()->isExpanded())
+      area()->collapseSlot();
+    else
+      area()->expandSlot();
+  }
+  else {
+    if (isExpanded())
+      collapseSlot();
+    else
+      expandSlot();
+  }
+}
+
+void
+CQPaletteWindow::
+expandSlot()
+{
+  if (expanded_) return;
+
+  if      (isVerticalDockArea()) {
+    CQWidgetUtil::resetWidgetMinMaxWidth(this);
+
+    resize(detachWidth_, height());
+  }
+  else if (isHorizontalDockArea()) {
+    CQWidgetUtil::resetWidgetMinMaxHeight(this);
+
+    resize(width(), detachHeight_);
+  }
+
+  expanded_ = true;
+
+  title_->updateState();
+}
+
+void
+CQPaletteWindow::
+collapseSlot()
+{
+  if (! expanded_) return;
+
+  expanded_ = false;
+
+  if      (isVerticalDockArea())
+    setFixedWidth(dockWidth());
+  else if (isHorizontalDockArea())
+    setFixedHeight(dockHeight());
+
+  title_->updateState();
 }
 
 void
@@ -1556,9 +1940,16 @@ attachSlot()
 {
   if (! detached_) return;
 
+  setDetached(false);
+  setFloating(false);
+
   area_->splitter()->addWidget(this);
 
-  setDetached(false);
+  area_->updateSplitterSizes();
+
+  setVisible(true);
+
+  area_->updateSize();
 }
 
 void
@@ -1567,15 +1958,28 @@ detachSlot()
 {
   if (detached_) return;
 
-  setDetached(true);
+  CQPaletteAreaPage *page = this->currentPage();
+  if (! page) return;
 
-  setParent(0, Constants::detachedFlags);
+  CQPaletteArea *area = area_;
 
-  int detachPos = area_->getDetachPos(width(), height());
+  removePage(page);
 
-  move(detachPos, detachPos);
+  CQPaletteWindow *newWindow = area->addWindow();
 
-  show();
+  newWindow->addPage(page);
+
+  int detachPos = area->getDetachPos(width(), height());
+
+  newWindow->move(detachPos, detachPos);
+
+  newWindow->setDetached(true);
+
+  if (! group_->numPages()) {
+    area->removeWindow(this);
+
+    QTimer::singleShot(10, this, SLOT(deleteLaterSlot()));
+  }
 }
 
 void
@@ -1586,22 +1990,22 @@ splitSlot()
 
   if (pages.size() == 1) return;
 
-  CQPaletteAreaPage *currentPage = this->currentPage();
+  CQPaletteAreaPage *page = this->currentPage();
 
-  if (! currentPage) return;
+  if (! page) return;
 
-  CQPaletteWindow *newWindow = mgr_->addWindow(area_->dockArea());
+  CQPaletteWindow *newWindow = area_->addWindow();
 
-  removePage(currentPage);
+  removePage(page);
 
-  newWindow->addPage(currentPage);
+  newWindow->addPage(page);
 }
 
 void
 CQPaletteWindow::
 joinSlot()
 {
-  const CQPaletteArea::Windows &windows = area_->getWindows();
+  const CQPaletteArea::Windows &windows = area_->windows();
 
   if (windows.size() <= 1) return;
 
@@ -1626,6 +2030,8 @@ joinSlot()
     removePage(page);
 
     joinWindow->addPage(page);
+
+    joinWindow->setCurrentPage(page);
   }
 
   this->deleteLater();
@@ -1638,6 +2044,26 @@ closeSlot()
   CQPaletteAreaPage *page = currentPage();
 
   removePage(page);
+}
+
+void
+CQPaletteWindow::
+resizeEvent(QResizeEvent *)
+{
+  if (! isDetached() || ! expanded_)
+    return;
+
+  updateDetachSize();
+}
+
+void
+CQPaletteWindow::
+updateDetachSize()
+{
+  if (isVerticalDockArea())
+    detachWidth_  = width();
+  else
+    detachHeight_ = height();
 }
 
 QSize
@@ -1669,7 +2095,7 @@ CQPaletteAreaTitle(CQPaletteArea *area) :
  area_(area), contextMenu_(0)
 {
   pinButton_    = addButton(QPixmap(pin_data));
-  expandButton_ = addButton(style()->standardIcon(QStyle::SP_TitleBarShadeButton, 0, this));
+  expandButton_ = addButton(QPixmap(left_triangle_data));
 
   connect(pinButton_   , SIGNAL(clicked()), this, SLOT(pinSlot()));
   connect(expandButton_, SIGNAL(clicked()), this, SLOT(expandSlot()));
@@ -1795,12 +2221,22 @@ updateState()
   pinButton_->setEnabled(! area_->isFloating() && ! area_->isDetached());
 
   if (area_->isExpanded()) {
-    expandButton_->setIcon(style()->standardIcon(QStyle::SP_TitleBarUnshadeButton, 0, this));
+    if      (area_->dockArea() == Qt::LeftDockWidgetArea ||
+             area_->dockArea() == Qt::BottomDockWidgetArea)
+      expandButton_->setIcon(QPixmap(left_triangle_data));
+    else if (area_->dockArea() == Qt::RightDockWidgetArea ||
+             area_->dockArea() == Qt::TopDockWidgetArea)
+      expandButton_->setIcon(QPixmap(right_triangle_data));
 
     expandButton_->setToolTip("Collapse");
   }
   else {
-    expandButton_->setIcon(style()->standardIcon(QStyle::SP_TitleBarShadeButton, 0, this));
+    if      (area_->dockArea() == Qt::LeftDockWidgetArea ||
+             area_->dockArea() == Qt::BottomDockWidgetArea)
+      expandButton_->setIcon(QPixmap(right_triangle_data));
+    else if (area_->dockArea() == Qt::RightDockWidgetArea ||
+             area_->dockArea() == Qt::TopDockWidgetArea)
+      expandButton_->setIcon(QPixmap(left_triangle_data));
 
     expandButton_->setToolTip("Expand");
   }
@@ -1848,13 +2284,14 @@ contextMenuEvent(QContextMenuEvent *e)
     if      (text == "Dock") {
       Qt::DockWidgetAreas allowedAreas = area_->calcAllowedAreas();
 
-      allowedAreas &= ~area_->dockArea();
+      if (! area_->isDetached())
+        allowedAreas &= ~area_->dockArea();
 
       QMenu *menu = action->menu();
 
       QList<QAction *> actions1 = menu->actions();
 
-      for (int j = 0; j < actions.size(); ++j) {
+      for (int j = 0; j < actions1.size(); ++j) {
         QAction *action1 = actions1.at(j);
 
         const QString &text1 = action1->text();
@@ -1988,17 +2425,22 @@ CQPaletteWindowTitle::
 CQPaletteWindowTitle(CQPaletteWindow *window) :
  window_(window), contextMenu_(0)
 {
-  closeButton_ = addButton(style()->standardIcon(QStyle::SP_TitleBarCloseButton, 0, this));
+  expandButton_ = addButton(QPixmap(left_triangle_data));
+  closeButton_  = addButton(style()->standardIcon(QStyle::SP_TitleBarCloseButton, 0, this));
 
-  connect(closeButton_, SIGNAL(clicked()), window_, SLOT(closeSlot()));
+  connect(expandButton_, SIGNAL(clicked()), window_, SLOT(toggleExpandSlot()));
+  connect(closeButton_ , SIGNAL(clicked()), window_, SLOT(closeSlot()));
 
-  closeButton_->setToolTip("Close");
+  expandButton_->setToolTip("Expand");
+  closeButton_ ->setToolTip("Close");
 
   setAttribute(Qt::WA_Hover);
 
   setFocusPolicy(Qt::NoFocus);
 
   setContextMenuPolicy(Qt::DefaultContextMenu);
+
+  updateState();
 }
 
 void
@@ -2027,6 +2469,36 @@ icon() const
 
 void
 CQPaletteWindowTitle::
+updateState()
+{
+  expandButton_->setVisible(window_->isDetached());
+
+  if (window_->isExpanded()) {
+    if      (window_->dockArea() == Qt::LeftDockWidgetArea ||
+             window_->dockArea() == Qt::BottomDockWidgetArea)
+      expandButton_->setIcon(QPixmap(left_triangle_data));
+    else if (window_->dockArea() == Qt::RightDockWidgetArea ||
+             window_->dockArea() == Qt::TopDockWidgetArea)
+      expandButton_->setIcon(QPixmap(right_triangle_data));
+
+    expandButton_->setToolTip("Collapse");
+  }
+  else {
+    if      (window_->dockArea() == Qt::LeftDockWidgetArea ||
+             window_->dockArea() == Qt::BottomDockWidgetArea)
+      expandButton_->setIcon(QPixmap(right_triangle_data));
+    else if (window_->dockArea() == Qt::RightDockWidgetArea ||
+             window_->dockArea() == Qt::TopDockWidgetArea)
+      expandButton_->setIcon(QPixmap(left_triangle_data));
+
+    expandButton_->setToolTip("Expand");
+  }
+
+  updateLayout();
+}
+
+void
+CQPaletteWindowTitle::
 contextMenuEvent(QContextMenuEvent *e)
 {
   if (! contextMenu_) {
@@ -2046,18 +2518,85 @@ contextMenuEvent(QContextMenuEvent *e)
     connect(dockTopItem   , SIGNAL(triggered()), window_, SLOT(dockTopSlot()));
     connect(dockBottomItem, SIGNAL(triggered()), window_, SLOT(dockBottomSlot()));
 
+    QAction *expandAction = contextMenu_->addAction("Expand");
     QAction *attachAction = contextMenu_->addAction("Attach");
     QAction *detachAction = contextMenu_->addAction("Detach");
     QAction *splitAction  = contextMenu_->addAction("Split");
     QAction *joinAction   = contextMenu_->addAction("Join" );
     QAction *closeAction  = contextMenu_->addAction("Close");
 
+    connect(expandAction, SIGNAL(triggered()), window_, SLOT(toggleExpandSlot()));
     connect(attachAction, SIGNAL(triggered()), window_, SLOT(attachSlot()));
     connect(detachAction, SIGNAL(triggered()), window_, SLOT(detachSlot()));
     connect(splitAction , SIGNAL(triggered()), window_, SLOT(splitSlot()));
     connect(joinAction  , SIGNAL(triggered()), window_, SLOT(joinSlot()));
     connect(closeAction , SIGNAL(triggered()), window_, SLOT(closeSlot()));
   }
+
+  //------
+
+  CQPaletteAreaPage *page = window_->currentPage();
+
+  QList<QAction *> actions = contextMenu_->actions();
+
+  for (int i = 0; i < actions.size(); ++i) {
+    QAction *action = actions.at(i);
+
+    const QString &text = action->text();
+
+    if      (text == "Dock") {
+      Qt::DockWidgetAreas allowedAreas;
+
+      if (page)
+        allowedAreas = page->allowedAreas();
+      else
+        allowedAreas = window_->calcAllowedAreas();
+
+      if (! window_->isDetached() && ! window_->area()->isDetached())
+        allowedAreas &= ~window_->area()->dockArea();
+
+      QMenu *menu = action->menu();
+
+      QList<QAction *> actions1 = menu->actions();
+
+      for (int j = 0; j < actions1.size(); ++j) {
+        QAction *action1 = actions1.at(j);
+
+        const QString &text1 = action1->text();
+
+        if      (text1 == "Left") {
+          action1->setEnabled(allowedAreas & Qt::LeftDockWidgetArea);
+        }
+        else if (text1 == "Right") {
+          action1->setEnabled(allowedAreas & Qt::RightDockWidgetArea);
+        }
+        else if (text1 == "Top") {
+          action1->setEnabled(allowedAreas & Qt::TopDockWidgetArea);
+        }
+        else if (text1 == "Bottom") {
+          action1->setEnabled(allowedAreas & Qt::BottomDockWidgetArea);
+        }
+      }
+    }
+    else if (text == "Expand" || text == "Collapse") {
+      action->setVisible(window_->isDetached());
+
+      if (window_->isExpanded())
+        action->setText("Collapse");
+      else
+        action->setText("Expand");
+    }
+    else if (text == "Attach")
+      action->setVisible(window_->isDetached());
+    else if (text == "Detach")
+      action->setVisible(! window_->isDetached());
+    else if (text == "Split")
+      action->setVisible(window_->numPages() > 1);
+    else if (text == "Join")
+      action->setVisible(window_->area()->numWindows() > 1);
+  }
+
+  //------
 
   contextMenu_->popup(e->globalPos());
 

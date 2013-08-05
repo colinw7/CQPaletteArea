@@ -7,10 +7,34 @@
 #include <QIcon>
 #include <map>
 
+class CQPaletteGroup;
 class CQPaletteWindow;
 class CQPaletteGroupTabBar;
 class CQPaletteGroupStack;
 class CQPaletteAreaPage;
+
+#define CQPaletteGroupMgrInst CQPaletteGroupMgr::getInstance()
+
+class CQPaletteGroupMgr {
+ public:
+  static CQPaletteGroupMgr *getInstance();
+
+  CQPaletteGroup *createGroup(CQPaletteWindow *window);
+
+  void removeGroup(CQPaletteGroup *group);
+
+  CQPaletteGroup *getGroup(const QString &name) const;
+
+  CQPaletteGroup *getGroupFromTabBar(const QString &name) const;
+
+ private:
+  CQPaletteGroupMgr();
+
+ private:
+  typedef std::vector<CQPaletteGroup *> Groups;
+
+  Groups groups_;
+};
 
 // class to hold a tabbed set of widgets displayed in a palette sub window
 class CQPaletteGroup : public QWidget {
@@ -21,6 +45,8 @@ class CQPaletteGroup : public QWidget {
 
  public:
   CQPaletteGroup(CQPaletteWindow *window);
+
+ ~CQPaletteGroup();
 
   CQPaletteWindow *window() const { return window_; }
 
@@ -66,9 +92,14 @@ class CQPaletteGroup : public QWidget {
 
   void pressTabIndex(int ind);
 
+  void tabMovePageSlot(const QString &fromName, int fromIndex, const QString &toName, int toIndex);
 
  private:
+  void updateCurrentPage();
+
   void updateLayout();
+
+  CQPaletteAreaPage *getPageForIndex(int ind) const;
 
   void showEvent(QShowEvent *);
 
@@ -118,6 +149,7 @@ class CQPaletteGroupStack : public QStackedWidget {
 
  public:
   CQPaletteGroupStack(QWidget *parent);
+ ~CQPaletteGroupStack();
 
   void addPage(CQPaletteAreaPage *page);
 
@@ -137,21 +169,27 @@ class CQPaletteAreaPage : public QObject {
   virtual ~CQPaletteAreaPage() { }
 
   CQPaletteGroup *group() const { return group_; }
-  void setGroup(CQPaletteGroup *group) { group_ = group; }
+  virtual void setGroup(CQPaletteGroup *group) { group_ = group; }
 
   QWidget *widget() const { return w_; }
-  void setWidget(QWidget *w) { w_ = w; }
+  virtual void setWidget(QWidget *w);
 
   uint id() const { return id_; }
 
+  Qt::DockWidgetArea dockArea() const { return dockArea_; }
+  virtual void setDockArea(Qt::DockWidgetArea dockArea) { dockArea_ = dockArea; }
+
   bool hidden() const { return hidden_; }
-  void setHidden(bool hidden) { hidden_ = hidden; }
+  virtual void setHidden(bool hidden) { hidden_ = hidden; }
 
-  bool resizable() const { return resizable_; }
+  bool widthResizable() const { return widthResizable_; }
+  virtual void setWidthResizable(bool resizable) { widthResizable_ = resizable; }
 
-  void setResizable(bool resizable) { resizable_ = resizable; }
+  bool heightResizable() const { return heightResizable_; }
+  virtual void setHeightResizable(bool resizable) { heightResizable_ = resizable; }
 
-  void setFixedSize(const QSize &size) { fixedSize_ = size, setResizable(false); }
+  virtual void setFixedWidth (int width ) { fixedWidth_  = width ; setWidthResizable (false); }
+  virtual void setFixedHeight(int height) { fixedHeight_ = height; setHeightResizable(false); }
 
   virtual QString windowTitle() const { return ""; }
 
@@ -166,12 +204,15 @@ class CQPaletteAreaPage : public QObject {
  private:
   static uint lastId_;
 
-  CQPaletteGroup *group_;     // parent group
-  QWidget        *w_;         // child widget
-  uint            id_;        // unique id
-  bool            hidden_;    // hidden
-  bool            resizable_; // resizable
-  QSize           fixedSize_; // fixed size
+  CQPaletteGroup     *group_;           // parent group
+  QWidget            *w_;               // child widget
+  uint                id_;              // unique id
+  Qt::DockWidgetArea  dockArea_;        // dock area
+  bool                hidden_;          // hidden
+  int                 fixedWidth_;      // fixed width
+  int                 fixedHeight_;     // fixed height
+  bool                widthResizable_;  // resizable
+  bool                heightResizable_; // resizable
 };
 
 #endif
