@@ -125,7 +125,7 @@ deleteArea(CQPaletteArea *area)
 
   assert(pos < areas.size());
 
-  for (int i = pos + 1; i < areas.size(); ++i)
+  for (uint i = pos + 1; i < areas.size(); ++i)
     areas[i - 1] = areas[i];
 
   areas.pop_back();
@@ -335,7 +335,7 @@ int CQPaletteArea::windowId_ = 1;
 
 CQPaletteArea::
 CQPaletteArea(CQPaletteAreaMgr *mgr, Qt::DockWidgetArea dockArea) :
- CQDockArea(mgr->window()), mgr_(mgr), visible_(true),
+ CQDockArea(mgr->window()), mgr_(mgr), hideTitle_(true), visible_(true),
  expanded_(true), pinned_(true), floating_(false), detached_(false)
 {
   setObjectName("area");
@@ -348,6 +348,8 @@ CQPaletteArea(CQPaletteAreaMgr *mgr, Qt::DockWidgetArea dockArea) :
   title_->updateDockArea();
 
   setTitleBarWidget(title_);
+
+  noTitle_ = new QWidget;
 
   setAllowedAreas(dockArea);
 
@@ -387,12 +389,15 @@ CQPaletteArea(CQPaletteAreaMgr *mgr, Qt::DockWidgetArea dockArea) :
   connect(this, SIGNAL(visibilityChanged(bool)), this, SLOT(updateVisibility(bool)));
 
   connect(this, SIGNAL(resizeFinished()), this, SLOT(updateSizeConstraints()));
+
+  updateTitle();
 }
 
 CQPaletteArea::
 ~CQPaletteArea()
 {
   delete previewHandler_;
+  delete noTitle_;
 }
 
 CQPaletteWindow *
@@ -438,6 +443,8 @@ addWindow(CQPaletteWindow *window)
   windows_.push_back(window);
 
   setVisible(true);
+
+  updateTitle();
 
   updateSize();
 }
@@ -530,6 +537,8 @@ addWindowAtPos(CQPaletteWindow *window, const QPoint &gpos)
 
   setVisible(true);
 
+  updateTitle();
+
   updateSize();
 }
 
@@ -557,6 +566,8 @@ removeWindow(CQPaletteWindow *window)
 
   window->setArea(0);
 
+  updateTitle();
+
   updateSize();
 }
 
@@ -576,6 +587,15 @@ numVisibleWindows() const
   }
 
   return num;
+}
+
+bool
+CQPaletteArea::
+isFirstWindow(const CQPaletteWindow *window) const
+{
+  int pos = splitter_->indexOf(const_cast<CQPaletteWindow *>(window));
+
+  return (pos == 0);
 }
 
 void
@@ -651,7 +671,7 @@ void
 CQPaletteArea::
 updateFloating(bool /*floating*/)
 {
-  title_->updateState();
+  updateTitle();
 
   updatePreviewState();
 }
@@ -723,7 +743,7 @@ expandSlot()
 
   expanded_ = true;
 
-  title_->updateState();
+  updateTitle();
 
   updatePreviewState();
 }
@@ -738,7 +758,7 @@ collapseSlot()
 
   expanded_ = false;
 
-  title_->updateState();
+  updateTitle();
 
   updatePreviewState();
 }
@@ -772,6 +792,8 @@ pinSlot()
 
   pinned_ = true;
 
+  updateTitle();
+
   updatePreviewState();
 }
 
@@ -782,6 +804,8 @@ unpinSlot()
   if (! pinned_) return;
 
   pinned_ = false;
+
+  updateTitle();
 
   updatePreviewState();
 }
@@ -894,7 +918,7 @@ setDetached(bool detached)
 
   resizer_->setActive(detached_);
 
-  title_->updateState();
+  updateTitle();
 
   updatePreviewState();
 }
@@ -1180,7 +1204,7 @@ dockAt(Qt::DockWidgetArea dockArea)
       mgr_->deleteArea(this);
   }
 
-  title_->updateState();
+  updateTitle();
 }
 
 // get position of detached area
@@ -1201,6 +1225,24 @@ getDetachPos(int w, int h) const
   detachPos += 16;
 
   return pos;
+}
+
+void
+CQPaletteArea::
+updateTitle()
+{
+  QWidget *titleWidget = title_;
+
+  if (hideTitle())
+    titleWidget = noTitle_;
+
+  if (titleWidget != titleBarWidget())
+    setTitleBarWidget(titleWidget);
+
+  for (Windows::iterator p = windows_.begin(); p != windows_.end(); ++p)
+    (*p)->updateTitle();
+
+  title_->updateState();
 }
 
 void
@@ -1447,6 +1489,13 @@ dockArea() const
   return area_->dockArea();
 }
 
+bool
+CQPaletteWindow::
+isFirstArea() const
+{
+  return area_->isFirstWindow(this);
+}
+
 void
 CQPaletteWindow::
 addPage(CQPaletteAreaPage *page)
@@ -1558,14 +1607,12 @@ updateLayout()
   while ((child = l->takeAt(0)) != 0)
     delete child;
 
-  if      (area_->isVerticalDockArea()) {
-    l->addWidget(title_, 0, 0);
+  l->addWidget(title_, 0, 0);
+
+  if      (area_->isVerticalDockArea())
     l->addWidget(group_, 1, 0);
-  }
-  else if (area_->isHorizontalDockArea()) {
-    l->addWidget(title_, 0, 0);
+  else if (area_->isHorizontalDockArea())
     l->addWidget(group_, 0, 1);
-  }
 }
 
 void
@@ -1661,7 +1708,7 @@ setDetached(bool detached)
   else
     setFrameStyle(QFrame::NoFrame | QFrame::Plain);
 
-  title_->updateState();
+  updateTitle();
 
   resizer_->setActive(detached_);
 
@@ -1749,8 +1796,13 @@ void
 CQPaletteWindow::
 cancelFloating()
 {
-  if (! newWindow_)
+  if (! newWindow_) {
     area_->splitter()->insertWidget(parentPos_, this);
+
+    area_->updateTitle();
+
+    area_->updateSize();
+  }
   else {
     CQPaletteAreaPage *currentPage = this->currentPage();
 
@@ -1880,9 +1932,23 @@ dockBottomSlot()
 
 void
 CQPaletteWindow::
+togglePinSlot()
+{
+  if (area()->isPinned())
+    area()->unpinSlot();
+  else
+    area()->pinSlot();
+
+  updateTitle();
+}
+
+void
+CQPaletteWindow::
 toggleExpandSlot()
 {
-  if (! isDetached()) {
+  bool isAreaTitle = isFirstArea();
+
+  if (isAreaTitle || ! isDetached()) {
     if (area()->isExpanded())
       area()->collapseSlot();
     else
@@ -1915,7 +1981,7 @@ expandSlot()
 
   expanded_ = true;
 
-  title_->updateState();
+  updateTitle();
 }
 
 void
@@ -1931,7 +1997,7 @@ collapseSlot()
   else if (isHorizontalDockArea())
     setFixedHeight(dockHeight());
 
-  title_->updateState();
+  updateTitle();
 }
 
 void
@@ -1948,6 +2014,8 @@ attachSlot()
   area_->updateSplitterSizes();
 
   setVisible(true);
+
+  area_->updateTitle();
 
   area_->updateSize();
 }
@@ -2044,6 +2112,13 @@ closeSlot()
   CQPaletteAreaPage *page = currentPage();
 
   removePage(page);
+}
+
+void
+CQPaletteWindow::
+updateTitle()
+{
+  title_->updateState();
 }
 
 void
@@ -2241,6 +2316,8 @@ updateState()
     expandButton_->setToolTip("Expand");
   }
 
+  //---
+
   updateLayout();
 }
 
@@ -2425,12 +2502,15 @@ CQPaletteWindowTitle::
 CQPaletteWindowTitle(CQPaletteWindow *window) :
  window_(window), contextMenu_(0)
 {
+  pinButton_    = addButton(QPixmap(pin_data));
   expandButton_ = addButton(QPixmap(left_triangle_data));
   closeButton_  = addButton(style()->standardIcon(QStyle::SP_TitleBarCloseButton, 0, this));
 
+  connect(pinButton_   , SIGNAL(clicked()), window_, SLOT(togglePinSlot()));
   connect(expandButton_, SIGNAL(clicked()), window_, SLOT(toggleExpandSlot()));
   connect(closeButton_ , SIGNAL(clicked()), window_, SLOT(closeSlot()));
 
+  pinButton_   ->setToolTip("Pin");
   expandButton_->setToolTip("Expand");
   closeButton_ ->setToolTip("Close");
 
@@ -2471,9 +2551,38 @@ void
 CQPaletteWindowTitle::
 updateState()
 {
-  expandButton_->setVisible(window_->isDetached());
+  bool isAreaTitle = window_->isFirstArea();
 
-  if (window_->isExpanded()) {
+  //---
+
+  bool isExpanded = (isAreaTitle ? window_->area()->isExpanded() : window_->isExpanded());
+
+  //---
+
+  if (isExpanded) {
+    pinButton_->setVisible(isAreaTitle);
+
+    if (window_->area()->isPinned()) {
+      pinButton_->setIcon(QPixmap(unpin_data));
+
+      pinButton_->setToolTip("Unpin");
+    }
+    else {
+      pinButton_->setIcon(QPixmap(pin_data));
+
+      pinButton_->setToolTip("Pin");
+    }
+  }
+  else
+    pinButton_->setVisible(false);
+
+  pinButton_->setEnabled(! window_->area()->isFloating() && ! window_->area()->isDetached());
+
+  //---
+
+  expandButton_->setVisible(isAreaTitle || window_->isDetached());
+
+  if (isExpanded) {
     if      (window_->dockArea() == Qt::LeftDockWidgetArea ||
              window_->dockArea() == Qt::BottomDockWidgetArea)
       expandButton_->setIcon(QPixmap(left_triangle_data));
@@ -2493,6 +2602,8 @@ updateState()
 
     expandButton_->setToolTip("Expand");
   }
+
+  //---
 
   updateLayout();
 }
@@ -2579,7 +2690,9 @@ contextMenuEvent(QContextMenuEvent *e)
       }
     }
     else if (text == "Expand" || text == "Collapse") {
-      action->setVisible(window_->isDetached());
+      bool isAreaTitle = window_->isFirstArea();
+
+      action->setVisible(isAreaTitle || window_->isDetached());
 
       if (window_->isExpanded())
         action->setText("Collapse");

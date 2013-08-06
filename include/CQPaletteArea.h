@@ -95,11 +95,12 @@ class CQPaletteAreaMgr : public QObject {
 class CQPaletteArea : public CQDockArea {
   Q_OBJECT
 
-  Q_PROPERTY(bool visible  READ isVisible)
-  Q_PROPERTY(bool expanded READ isExpanded)
-  Q_PROPERTY(bool pinned   READ isPinned)
-  Q_PROPERTY(bool floating READ isFloating)
-  Q_PROPERTY(bool detached READ isDetached)
+  Q_PROPERTY(bool hideTitle READ hideTitle)
+  Q_PROPERTY(bool visible   READ isVisible)
+  Q_PROPERTY(bool expanded  READ isExpanded)
+  Q_PROPERTY(bool pinned    READ isPinned)
+  Q_PROPERTY(bool floating  READ isFloating)
+  Q_PROPERTY(bool detached  READ isDetached)
 
  private:
   typedef std::vector<CQPaletteAreaPage*> Pages;
@@ -117,9 +118,10 @@ class CQPaletteArea : public CQDockArea {
   //! get splitter
   QSplitter *splitter() const { return splitter_; }
 
-  void setVisible(bool visible);
+  bool hideTitle() const { return hideTitle_; }
 
   bool isVisible() const { return visible_; }
+  void setVisible(bool visible);
 
   bool isExpanded() const { return expanded_; }
 
@@ -167,6 +169,8 @@ class CQPaletteArea : public CQDockArea {
   uint numWindows() const { return windows_.size(); }
 
   uint numVisibleWindows() const;
+
+  bool isFirstWindow(const CQPaletteWindow *window) const;
 
   //! add page to area
   void addPage(CQPaletteAreaPage *page, bool current=false);
@@ -245,6 +249,8 @@ class CQPaletteArea : public CQDockArea {
 
   int getDetachPos(int w, int h) const;
 
+  void updateTitle();
+
   //! handle resize
   void resizeEvent(QResizeEvent *);
 
@@ -259,6 +265,8 @@ class CQPaletteArea : public CQDockArea {
 
   CQPaletteAreaMgr    *mgr_;            //! parent manager
   CQPaletteAreaTitle  *title_;          //! title bar
+  QWidget             *noTitle_;        //! dummy widget to hide title bar
+  bool                 hideTitle_;      //! auto hide title
   bool                 visible_;        //! is visible
   bool                 expanded_;       //! expanded
   bool                 pinned_;         //! pinned
@@ -357,6 +365,8 @@ class CQPaletteWindow : public QFrame {
   friend class CQPaletteArea;
   friend class CQPaletteWindowTitle;
 
+  bool isFirstArea() const;
+
   void updateLayout();
 
   void updateDockArea();
@@ -400,6 +410,8 @@ class CQPaletteWindow : public QFrame {
 
   Qt::DockWidgetAreas calcAllowedAreas() const;
 
+  void updateTitle();
+
   void resizeEvent(QResizeEvent *);
 
   void updateDetachSize();
@@ -410,6 +422,7 @@ class CQPaletteWindow : public QFrame {
   void dockTopSlot();
   void dockBottomSlot();
 
+  void togglePinSlot();
   void toggleExpandSlot();
   void expandSlot();
   void collapseSlot();
@@ -571,6 +584,7 @@ class CQPaletteWindowTitle : public CQTitleBar {
 
   CQPaletteWindow  *window_;       //! parent window
   MouseState        mouseState_;   //! mouse state
+  CQTitleBarButton *pinButton_;    //! pin button
   CQTitleBarButton *expandButton_; //! expand button
   CQTitleBarButton *closeButton_;  //! close button
   QMenu            *contextMenu_;  //! context menu
