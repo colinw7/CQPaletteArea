@@ -62,6 +62,8 @@ class CQPaletteAreaMgr : public QObject {
 
   CQPaletteArea *getArea(Qt::DockWidgetArea area);
 
+  CQPaletteArea *createArea(Qt::DockWidgetArea dockArea);
+
   void deleteArea(CQPaletteArea *area);
 
   //! get area at point
@@ -95,12 +97,22 @@ class CQPaletteAreaMgr : public QObject {
 class CQPaletteArea : public CQDockArea {
   Q_OBJECT
 
-  Q_PROPERTY(bool hideTitle READ hideTitle)
-  Q_PROPERTY(bool visible   READ isVisible)
-  Q_PROPERTY(bool expanded  READ isExpanded)
-  Q_PROPERTY(bool pinned    READ isPinned)
-  Q_PROPERTY(bool floating  READ isFloating)
-  Q_PROPERTY(bool detached  READ isDetached)
+  Q_PROPERTY(bool        hideTitle   READ hideTitle)
+  Q_PROPERTY(WindowState windowState READ windowState)
+  Q_PROPERTY(bool        visible     READ isVisible)
+  Q_PROPERTY(bool        expanded    READ isExpanded)
+  Q_PROPERTY(bool        pinned      READ isPinned)
+  Q_PROPERTY(bool        floating    READ isFloating)
+  Q_PROPERTY(bool        detached    READ isDetached)
+
+  Q_ENUMS(WindowState);
+
+ public:
+  enum WindowState {
+    NormalState,
+    FloatingState,
+    DetachedState
+  };
 
  private:
   typedef std::vector<CQPaletteAreaPage*> Pages;
@@ -227,6 +239,10 @@ class CQPaletteArea : public CQDockArea {
   //! get highlight rectangle
   QRect getHighlightRect() const;
 
+  //! get/set window state
+  WindowState windowState() const { return windowState_; }
+  void setWindowState(WindowState state);
+
   //! get highlight rectangle at position
   QRect getHighlightRectAtPos(const QPoint &gpos) const;
 
@@ -266,6 +282,7 @@ class CQPaletteArea : public CQDockArea {
   CQPaletteAreaMgr    *mgr_;            //! parent manager
   CQPaletteAreaTitle  *title_;          //! title bar
   QWidget             *noTitle_;        //! dummy widget to hide title bar
+  WindowState          windowState_;    //! window state
   bool                 hideTitle_;      //! auto hide title
   bool                 visible_;        //! is visible
   bool                 expanded_;       //! expanded
@@ -287,11 +304,22 @@ class CQPaletteArea : public CQDockArea {
 class CQPaletteWindow : public QFrame {
   Q_OBJECT
 
-  Q_PROPERTY(bool               visible  READ isVisible)
-  Q_PROPERTY(Qt::DockWidgetArea dockArea READ dockArea)
-  Q_PROPERTY(bool               floating READ isFloating)
-  Q_PROPERTY(bool               expanded READ isExpanded)
-  Q_PROPERTY(bool               detached READ isDetached)
+  Q_PROPERTY(bool               detachToArea READ detachToArea WRITE setDetachToArea)
+  Q_PROPERTY(WindowState        windowState  READ windowState)
+  Q_PROPERTY(bool               visible      READ isVisible)
+  Q_PROPERTY(Qt::DockWidgetArea dockArea     READ dockArea)
+  Q_PROPERTY(bool               floating     READ isFloating)
+  Q_PROPERTY(bool               expanded     READ isExpanded)
+  Q_PROPERTY(bool               detached     READ isDetached)
+
+  Q_ENUMS(WindowState)
+
+ public:
+  enum WindowState {
+    NormalState,
+    FloatingState,
+    DetachedState
+  };
 
  private:
   typedef std::vector<CQPaletteAreaPage*> Pages;
@@ -308,8 +336,11 @@ class CQPaletteWindow : public QFrame {
   //! get group
   CQPaletteGroup *group() const { return group_; }
 
-  void setVisible(bool visible);
+  bool detachToArea() const { return detachToArea_; }
+  void setDetachToArea(bool detach) { detachToArea_ = detach; }
+
   bool isVisible() const { return visible_; }
+  void setVisible(bool visible);
 
   Qt::DockWidgetArea dockArea() const;
 
@@ -391,11 +422,20 @@ class CQPaletteWindow : public QFrame {
   //! set detached
   void setDetached(bool detached);
 
+  bool isDetachedNoArea() const;
+
   //! set floated
   void setFloated(bool floating, const QPoint &pos=QPoint(), bool dragAll=false);
 
   //! cancel floating
   void cancelFloating();
+
+  //! get/set window state
+  WindowState windowState() const { return windowState_; }
+  void setWindowState(WindowState state);
+
+  //! detach window into new area
+  void detachToNewArea();
 
   //! animate drop at point
   void animateDrop(const QPoint &p);
@@ -440,9 +480,11 @@ class CQPaletteWindow : public QFrame {
   CQPaletteWindowTitle *title_;        //! title bar
   CQPaletteGroup       *group_;        //! palette group
   CQWidgetResizer      *resizer_;      //! resizer
+  WindowState           windowState_;  //! window state
   CQPaletteWindow      *newWindow_;    //! window for other tabs
   QWidget              *parent_;       //! parent widget (before float)
   int                   parentPos_;    //! parent splitter index
+  bool                  detachToArea_; //! detach to new area
   bool                  visible_;      //! is visible
   bool                  expanded_;     //! is expanded
   bool                  floating_;     //! is floating

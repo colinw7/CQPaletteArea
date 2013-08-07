@@ -48,13 +48,7 @@ CQPaletteAreaMgr(QMainWindow *window) :
   for (int i = 0; i < 4; ++i) {
     Qt::DockWidgetArea dockArea = dockAreas[i];
 
-    CQPaletteArea *area = new CQPaletteArea(this, dockArea);
-
-    area->setObjectName(dockAreaName(dockArea));
-
-    palettes_[dockArea].push_back(area);
-
-    area->setVisible(false);
+    (void) createArea(dockArea);
   }
 
   rubberBand_ = new CQRubberBand;
@@ -100,6 +94,13 @@ getArea(Qt::DockWidgetArea dockArea)
     return *pa;
   }
 
+  return createArea(dockArea);
+}
+
+CQPaletteArea *
+CQPaletteAreaMgr::
+createArea(Qt::DockWidgetArea dockArea)
+{
   CQPaletteArea *area = new CQPaletteArea(this, dockArea);
 
   area->setObjectName(dockAreaName(dockArea));
@@ -228,8 +229,10 @@ getAreaAt(const QPoint &pos, Qt::DockWidgetAreas allowedAreas) const
     for (Areas::const_iterator pa = areas.begin(); pa != areas.end(); ++pa) {
       CQPaletteArea *area = *pa;
 
-      if (! area->isDetached())
+      if (! area->isDetached()) {
         hasAttached = true;
+        break;
+      }
     }
 
     if (! hasAttached) {
@@ -335,8 +338,8 @@ int CQPaletteArea::windowId_ = 1;
 
 CQPaletteArea::
 CQPaletteArea(CQPaletteAreaMgr *mgr, Qt::DockWidgetArea dockArea) :
- CQDockArea(mgr->window()), mgr_(mgr), hideTitle_(true), visible_(true),
- expanded_(true), pinned_(true), floating_(false), detached_(false)
+ CQDockArea(mgr->window()), mgr_(mgr), windowState_(NormalState), hideTitle_(true),
+ visible_(true), expanded_(true), pinned_(true), floating_(false), detached_(false)
 {
   setObjectName("area");
 
@@ -429,7 +432,12 @@ addWindow(CQPaletteWindow *window)
   window->setArea(this);
 
   window->setVisible(true);
-  window->setDetached(false);
+
+  if (! window->detachToArea())
+    window->setDetached(false);
+  else
+    window->setWindowState(CQPaletteWindow::NormalState);
+
   window->setFloating(false);
 
   splitter()->addWidget(window);
@@ -523,7 +531,12 @@ addWindowAtPos(CQPaletteWindow *window, const QPoint &gpos)
   }
 
   window->setVisible(true);
-  window->setDetached(false);
+
+  if (! window->detachToArea())
+    window->setDetached(false);
+  else
+    window->setWindowState(CQPaletteWindow::NormalState);
+
   window->setFloating(false);
 
   if (pos != -1)
@@ -556,6 +569,8 @@ removeWindow(CQPaletteWindow *window)
     else
       windows_[i - 1] = windows_[i];
   }
+
+  assert(ind >= 0);
 
   windows_.pop_back();
 
@@ -907,9 +922,9 @@ setDetached(bool detached)
   detached_ = detached;
 
   if (detached_)
-    setParent(0, Constants::detachedFlags);
+    setWindowState(DetachedState);
   else
-    setParent(0, Constants::normalFlags);
+    setWindowState(NormalState);
 
   setVisible(true);
 
@@ -946,7 +961,7 @@ setFloated(bool floating, const QPoint &pos, bool /*dragAll*/)
   if (floating) {
     QPoint lpos = mapFromGlobal(pos);
 
-    setParent(0, Constants::floatingFlags);
+    setWindowState(FloatingState);
 
     if (! pos.isNull())
       move(pos - lpos);
@@ -959,7 +974,7 @@ setFloated(bool floating, const QPoint &pos, bool /*dragAll*/)
     allowedAreas_ = calcAllowedAreas();
   }
   else {
-    setParent(0, Constants::normalFlags);
+    setWindowState(NormalState);
 
     mgr_->window()->addDockWidget(dockArea(), this);
   }
@@ -991,7 +1006,7 @@ CQPaletteArea::
 cancelFloating()
 {
   if (! isDetached()) {
-    setParent(0, Constants::normalFlags);
+    setWindowState(NormalState);
 
     mgr_->window()->addDockWidget(dockArea(), this);
 
@@ -1061,6 +1076,23 @@ CQPaletteArea::
 clearDrop()
 {
   mgr_->clearHighlight();
+}
+
+void
+CQPaletteArea::
+setWindowState(WindowState state)
+{
+  if (windowState_ == state)
+    return;
+
+  windowState_ = state;
+
+  if      (windowState_ == NormalState)
+    setParent(0, Constants::normalFlags);
+  else if (windowState_ == FloatingState)
+    setParent(0, Constants::floatingFlags);
+  else if (windowState_ == DetachedState)
+    setParent(0, Constants::detachedFlags);
 }
 
 QRect
@@ -1433,8 +1465,10 @@ sizeHint() const
 
 CQPaletteWindow::
 CQPaletteWindow(CQPaletteArea *area, uint id) :
- mgr_(area->mgr()), area_(area), id_(id), parent_(0),
- visible_(true), expanded_(true), floating_(false), detached_(false)
+ mgr_(area->mgr()), area_(area), id_(id), title_(0), group_(0), resizer_(0),
+ windowState_(NormalState), newWindow_(0), parent_(0), parentPos_(-1), detachToArea_(true),
+ visible_(true), expanded_(true), floating_(false), detached_(false), allowedAreas_(0),
+ detachWidth_(0), detachHeight_(0)
 {
   setObjectName(QString("window_%1").arg(id_));
 
@@ -1688,15 +1722,17 @@ void
 CQPaletteWindow::
 setDetached(bool detached)
 {
+  assert(! detachToArea());
+
   if (detached_ == detached)
     return;
 
   detached_ = detached;
 
   if (detached_)
-    setParent(0, Constants::detachedFlags);
+    setWindowState(DetachedState);
   else
-    setParent(0, Constants::normalFlags);
+    setWindowState(NormalState);
 
   setVisible(true);
 
@@ -1769,7 +1805,7 @@ setFloated(bool floating, const QPoint &pos, bool dragAll)
 
     QPoint lpos = mapFromGlobal(pos);
 
-    setParent(0, Constants::floatingFlags);
+    setWindowState(FloatingState);
 
     if (! pos.isNull())
       move(pos - lpos);
@@ -1784,7 +1820,7 @@ setFloated(bool floating, const QPoint &pos, bool dragAll)
   }
   else {
     if (! isDetached())
-      setParent(area_, Constants::normalFlags);
+      setWindowState(NormalState);
   }
 
   setFloating(floating);
@@ -1818,9 +1854,53 @@ cancelFloating()
   }
 
   if (! isDetached())
-    setParent(area_, Constants::normalFlags);
+    setWindowState(NormalState);
 
   setFloating(false);
+}
+
+void
+CQPaletteWindow::
+detachToNewArea()
+{
+  setWindowState(NormalState);
+
+  QPoint pos  = this->pos();
+  QSize  size = this->size();
+
+  CQPaletteArea *area = mgr_->createArea(dockArea());
+
+  area_->removeWindow(this);
+
+  area->addWindow(this);
+
+  area->setDetached(true);
+
+  area->move(pos);
+  area->resize(size);
+
+  area->updateTitle();
+  area->updateSize();
+
+  area_->updateTitle();
+  area_->updateSize();
+}
+
+void
+CQPaletteWindow::
+setWindowState(WindowState state)
+{
+  if (windowState_ == state)
+    return;
+
+  windowState_ = state;
+
+  if      (windowState_ == NormalState)
+    setParent(area_, Constants::normalFlags);
+  else if (windowState_ == FloatingState)
+    setParent(0, Constants::floatingFlags);
+  else if (windowState_ == DetachedState)
+    setParent(0, Constants::detachedFlags);
 }
 
 void
@@ -1842,7 +1922,11 @@ execDrop(const QPoint &gpos, bool floating)
   CQPaletteArea *area = mgr_->getAreaAt(gpos, allowedAreas());
 
   if (area) {
-    setDetached(false);
+    if (! detachToArea())
+      setDetached(false);
+    else
+      setWindowState(NormalState);
+
     setFloating(false);
 
     area_->removeWindow(this);
@@ -1852,11 +1936,17 @@ execDrop(const QPoint &gpos, bool floating)
     if (! area->isDetached())
       mgr_->window()->addDockWidget(area->dockArea(), area);
 
+    area->updateTitle();
+
     area->updateSize();
   }
   else {
     setFloating(false);
-    setDetached(true);
+
+    if (detachToArea())
+      detachToNewArea();
+    else
+      setDetached(true);
 
     setVisible(true);
   }
@@ -2006,7 +2096,11 @@ attachSlot()
 {
   if (! detached_) return;
 
-  setDetached(false);
+  if (! detachToArea())
+    setDetached(false);
+  else
+    setWindowState(NormalState);
+
   setFloating(false);
 
   area_->splitter()->addWidget(this);
@@ -2031,9 +2125,9 @@ detachSlot()
 
   CQPaletteArea *area = area_;
 
-  removePage(page);
-
   CQPaletteWindow *newWindow = area->addWindow();
+
+  removePage(page);
 
   newWindow->addPage(page);
 
@@ -2041,7 +2135,10 @@ detachSlot()
 
   newWindow->move(detachPos, detachPos);
 
-  newWindow->setDetached(true);
+  if (newWindow->detachToArea())
+    newWindow->detachToNewArea();
+  else
+    newWindow->setDetached(true);
 
   if (! group_->numPages()) {
     area->removeWindow(this);
@@ -2103,6 +2200,16 @@ joinSlot()
   }
 
   this->deleteLater();
+}
+
+bool
+CQPaletteWindow::
+isDetachedNoArea() const
+{
+  if (! isDetached())
+    return false;
+
+  return ! detachToArea();
 }
 
 void

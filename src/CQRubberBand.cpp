@@ -3,7 +3,7 @@
 #include <QPainter>
 #include <QStyleOption>
 
-#define WINDOWS_XP_STYLE 1
+#define COMMON_STYLE 1
 
 class CQRubberBandStyle : public QCommonStyle {
  public:
@@ -31,7 +31,7 @@ class CQRubberBandStyle : public QCommonStyle {
       QRect r = opt->rect;
       QStyleHintReturnMask mask;
       if (proxy()->styleHint(QStyle::SH_RubberBand_Mask, opt, widget, &mask))
-          p->setClipRegion(mask.region);
+        p->setClipRegion(mask.region);
       p->drawTiledPixmap(r.x(), r.y(), r.width(), r.height(), tiledPixmap);
       p->setPen(opt->palette.color(QPalette::Active, QPalette::WindowText));
       p->setBrush(Qt::NoBrush);
@@ -56,7 +56,7 @@ class CQRubberBandStyle : public QCommonStyle {
       QRect r = opt->rect;
       QStyleHintReturnMask mask;
       if (styleHint(QStyle::SH_RubberBand_Mask, opt, widget, &mask))
-          p->setClipRegion(mask.region);
+        p->setClipRegion(mask.region);
       p->drawTiledPixmap(r.x(), r.y(), r.width(), r.height(), tiledPixmap);
       p->restore();
 #endif
@@ -83,7 +83,7 @@ class CQRubberBandStyle : public QCommonStyle {
       QRect r = opt->rect;
       QStyleHintReturnMask mask;
       if (proxy()->styleHint(QStyle::SH_RubberBand_Mask, opt, widget, &mask))
-          p->setClipRegion(mask.region);
+        p->setClipRegion(mask.region);
       p->drawTiledPixmap(r.x(), r.y(), r.width(), r.height(), tiledPixmap);
       p->restore();
 #endif
