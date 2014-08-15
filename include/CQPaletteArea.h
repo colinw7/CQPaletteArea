@@ -10,6 +10,7 @@
 
 class CQPaletteArea;
 class CQPaletteAreaTitle;
+class CQPaletteAreaNoTitle;
 class CQPaletteWindow;
 class CQPaletteWindowTitle;
 class CQPaletteWindowTitleButton;
@@ -18,11 +19,11 @@ class CQPalettePreview;
 class CQPaletteGroup;
 class CQPaletteAreaPage;
 
+class CQSplitterArea;
 class CQWidgetResizer;
 class CQRubberBand;
 
 class QScrollArea;
-class QSplitter;
 
 //! palette area manager creates palette areas on all four sides of the main
 //! window and controls palette like children which can be moved between each
@@ -38,7 +39,7 @@ class CQPaletteAreaMgr : public QObject {
  ~CQPaletteAreaMgr();
 
   //! get main window
-  QMainWindow *window() const { return window_; }
+  QMainWindow *window() { return window_; }
 
   //! add page to area
   void addPage(CQPaletteAreaPage *page, Qt::DockWidgetArea dockArea);
@@ -128,7 +129,7 @@ class CQPaletteArea : public CQDockArea {
   CQPaletteAreaMgr *mgr() const { return mgr_; }
 
   //! get splitter
-  QSplitter *splitter() const { return splitter_; }
+  CQSplitterArea *splitter() const { return splitter_; }
 
   bool hideTitle() const { return hideTitle_; }
 
@@ -146,6 +147,8 @@ class CQPaletteArea : public CQDockArea {
 
   //! add child window
   CQPaletteWindow *addWindow();
+
+  bool moveSplitter(int d);
 
   //! size hint
   QSize sizeHint() const;
@@ -188,6 +191,8 @@ class CQPaletteArea : public CQDockArea {
   void addPage(CQPaletteAreaPage *page, bool current=false);
 
   void setCollapsedSize();
+
+  void updateSizeConstraints();
 
   //! update preview state
   void updatePreviewState();
@@ -270,8 +275,11 @@ class CQPaletteArea : public CQDockArea {
   //! handle resize
   void resizeEvent(QResizeEvent *);
 
+  //! handle move
+  void moveEvent(QMoveEvent *);
+
  private slots:
-  void updateSizeConstraints();
+  void updateSplitter();
 
  private:
   friend class CQPaletteAreaMgr;
@@ -279,21 +287,21 @@ class CQPaletteArea : public CQDockArea {
 
   static int windowId_; //! window id
 
-  CQPaletteAreaMgr    *mgr_;            //! parent manager
-  CQPaletteAreaTitle  *title_;          //! title bar
-  QWidget             *noTitle_;        //! dummy widget to hide title bar
-  WindowState          windowState_;    //! window state
-  bool                 hideTitle_;      //! auto hide title
-  bool                 visible_;        //! is visible
-  bool                 expanded_;       //! expanded
-  bool                 pinned_;         //! pinned
-  QSplitter           *splitter_;       //! splitter widget
-  CQWidgetResizer     *resizer_;        //! resizer
-  Windows              windows_;        //! child windows
-  bool                 floating_;       //! is floating
-  bool                 detached_;       //! is detached
-  Qt::DockWidgetAreas  allowedAreas_;   //! allowed areas
-  CQPalettePreview    *previewHandler_; //! preview (unpinned) handler
+  CQPaletteAreaMgr     *mgr_;            //! parent manager
+  CQPaletteAreaTitle   *title_;          //! title bar
+  CQPaletteAreaNoTitle *noTitle_;        //! dummy widget to hide title bar
+  WindowState           windowState_;    //! window state
+  bool                  hideTitle_;      //! auto hide title
+  bool                  visible_;        //! is visible
+  bool                  expanded_;       //! expanded
+  bool                  pinned_;         //! pinned
+  CQSplitterArea       *splitter_;       //! splitter widget
+  CQWidgetResizer      *resizer_;        //! resizer
+  Windows               windows_;        //! child windows
+  bool                  floating_;       //! is floating
+  bool                  detached_;       //! is detached
+  Qt::DockWidgetAreas   allowedAreas_;   //! allowed areas
+  CQPalettePreview     *previewHandler_; //! preview (unpinned) handler
 };
 
 //------
@@ -566,6 +574,16 @@ class CQPaletteAreaTitle : public CQTitleBar {
   CQTitleBarButton *pinButton_;    //! pin button
   CQTitleBarButton *expandButton_; //! expand button
   QMenu            *contextMenu_;  //! context menu
+};
+
+//------
+
+class CQPaletteAreaNoTitle : public QWidget {
+ public:
+  CQPaletteAreaNoTitle(QWidget *parent=0);
+
+  QSize sizeHint() const;
+  QSize minimumSizeHint() const;
 };
 
 //------

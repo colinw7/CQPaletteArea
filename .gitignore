@@ -1,0 +1,13 @@
+*.o
+*.a
+
+moc_*
+
+src/Makefile
+test/Makefile
+
+test/CQPaletteAreaTest
+
+bin/
+obj/
+lib/

@@ -11,7 +11,6 @@ class QMimeData;
 class CQTabBarButton;
 class CQTabBarScrollButton;
 class QStylePainter;
-class QStyleOptionTabV2;
 
 /*!
  * \ingroup WinFWCore

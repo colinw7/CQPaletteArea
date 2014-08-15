@@ -1,8 +1,10 @@
 TEMPLATE = app
 
-TARGET = 
+TARGET = CQPaletteAreaTest
 
 DEPENDPATH += .
+
+QT += widgets
 
 #CONFIG += debug
 
@@ -23,8 +25,7 @@ INCLUDEPATH += \
 
 PRE_TARGETDEPS = \
 ../lib/libCQPaletteArea.a \
-../../CQTitleBar/lib/libCQTitleBar.a
 
 unix:LIBS += \
--L../lib -L../../CQTitleBar/lib \
--lCQPaletteArea -lCQTitleBar
+-L../lib \
+-lCQPaletteArea

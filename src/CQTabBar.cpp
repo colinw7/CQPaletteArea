@@ -7,6 +7,8 @@
 #include <QStyleOptionTab>
 #include <QMouseEvent>
 #include <QToolTip>
+#include <QDrag>
+#include <QMimeData>
 
 #include <cassert>
 
@@ -826,8 +828,8 @@ mouseMoveEvent(QMouseEvent *e)
       QString numStr = QString("%1").arg(pressIndex_);
 
       mimeData->setData(mimeId    , dragId);
-      mimeData->setData(mimeNameId, objectName().toAscii());
-      mimeData->setData(mimeTabId , numStr.toAscii());
+      mimeData->setData(mimeNameId, objectName().toLatin1());
+      mimeData->setData(mimeTabId , numStr.toLatin1());
 
       drag->setMimeData(mimeData);
 

@@ -315,7 +315,7 @@ pressTabIndex(int /*ind*/)
 
 void
 CQPaletteGroup::
-tabMovePageSlot(const QString &fromName, int fromIndex, const QString &toName, int toIndex)
+tabMovePageSlot(const QString &fromName, int fromIndex, const QString &toName, int /*toIndex*/)
 {
   CQPaletteGroup *group1 = CQPaletteGroupMgrInst->getGroupFromTabBar(fromName);
   CQPaletteGroup *group2 = CQPaletteGroupMgrInst->getGroupFromTabBar(toName);
