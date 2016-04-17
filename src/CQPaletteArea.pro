@@ -4,6 +4,8 @@ TARGET = CQPaletteArea
 
 DEPENDPATH += .
 
+MOC_DIR = .moc
+
 QT += widgets
 
 CONFIG += staticlib
@@ -18,17 +20,15 @@ HEADERS += \
 ../include/CQTabBar.h \
 ../include/CQWidgetResizer.h \
 CQSplitterArea.h \
-CQTitleBar.h \
 
 SOURCES += \
-CQPaletteArea.cpp \
 CQDockArea.cpp \
-CQPalettePreview.cpp \
+CQPaletteArea.cpp \
 CQPaletteGroup.cpp \
+CQPalettePreview.cpp \
 CQRubberBand.cpp \
 CQSplitterArea.cpp \
 CQTabBar.cpp \
-CQTitleBar.cpp \
 CQWidgetResizer.cpp \
 
 OBJECTS_DIR = ../obj
