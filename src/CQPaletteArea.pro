@@ -10,6 +10,9 @@ QT += widgets
 
 CONFIG += staticlib
 
+QMAKE_CXXFLAGS += \
+-std=c++11
+
 # Input
 HEADERS += \
 ../include/CQDockArea.h \
@@ -19,7 +22,7 @@ HEADERS += \
 ../include/CQRubberBand.h \
 ../include/CQTabBar.h \
 ../include/CQWidgetResizer.h \
-CQSplitterArea.h \
+../include/CQSplitterArea.h \
 
 SOURCES += \
 CQDockArea.cpp \

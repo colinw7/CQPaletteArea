@@ -15,6 +15,7 @@
 #include <QGridLayout>
 #include <QVBoxLayout>
 #include <QStylePainter>
+#include <QStyleOption>
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include <QMenu>

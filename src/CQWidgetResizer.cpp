@@ -403,8 +403,10 @@ keyPressEvent(QKeyEvent *e)
           mode_ = BottomLeft;
         else if (mode_ == TopRight)
           mode_ = TopLeft;
-          setMouseCursor(mode_);
-          widget_->grabMouse(widget_->cursor());
+
+        setMouseCursor(mode_);
+
+        widget_->grabMouse(widget_->cursor());
       }
 
       break;
