@@ -11,7 +11,7 @@ QT += widgets
 CONFIG += staticlib
 
 QMAKE_CXXFLAGS += \
--std=c++11
+-std=c++14
 
 # Input
 HEADERS += \
