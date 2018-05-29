@@ -477,7 +477,7 @@ addWindowAtPos(CQPaletteWindow *window, const QPoint &gpos)
 
       if      (y > -tol && y < tol) {
         pos = i;
-        break;;
+        break;
       }
       else if (y > h - tol && y < h + tol) {
         pos = i + 1;
@@ -1166,7 +1166,7 @@ getHighlightRectAtPos(const QPoint &gpos) const
     if      (isVerticalDockArea()) {
       int y = widget->mapFromGlobal(gpos).y();
 
-      if      (y >    - tol && y <      tol) { rect = QRect(0,   - tol, w,     2*tol); break;; }
+      if      (y >    - tol && y <      tol) { rect = QRect(0,   - tol, w,     2*tol); break; }
       else if (y >  h - tol && y <  h + tol) { rect = QRect(0, h - tol, w,     2*tol); break; }
       else if (y >=     tol && y <= h - tol) { rect = QRect(0,     tol, w, h - 2*tol); break; }
     }
