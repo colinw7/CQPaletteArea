@@ -446,7 +446,11 @@ paintEvent(QPaintEvent *)
   int h = height();
 
   // set tab style
+#if QT_VERSION < 0x050000
   QStyleOptionTabV2 tabStyle;
+#else
+  QStyleOptionTab tabStyle;
+#endif
 
   tabStyle.initFrom(this);
 
@@ -455,7 +459,11 @@ paintEvent(QPaintEvent *)
   int overlap = style()->pixelMetric(QStyle::PM_TabBarBaseOverlap, &tabStyle, this);
 
   // set tab base style
+#if QT_VERSION < 0x050000
   QStyleOptionTabBarBaseV2 baseStyle;
+#else
+  QStyleOptionTabBarBase baseStyle;
+#endif
 
   baseStyle.initFrom(this);
 

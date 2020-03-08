@@ -10,7 +10,6 @@ class QMimeData;
 
 class CQTabBarButton;
 class CQTabBarScrollButton;
-class QStylePainter;
 
 /*!
  * \ingroup WinFWCore
