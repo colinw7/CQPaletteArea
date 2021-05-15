@@ -123,10 +123,10 @@ class CQTabBar : public QWidget {
   QWidget *tabWidget(int index) const;
 
   //! size hint (preferred size)
-  QSize sizeHint() const;
+  QSize sizeHint() const override;
 
   //! minimum size hint
-  QSize minimumSizeHint() const;
+  QSize minimumSizeHint() const override;
 
   //! get index of tab at specified point
   int tabAt(const QPoint &p) const;
@@ -148,28 +148,28 @@ class CQTabBar : public QWidget {
   int tabButtonPos(int index) const;
 
   //! handle paint event
-  void paintEvent(QPaintEvent *);
+  void paintEvent(QPaintEvent *) override;
 
   //! handle resize event
-  void resizeEvent(QResizeEvent *);
+  void resizeEvent(QResizeEvent *) override;
 
   //! handle mouse press event
-  void mousePressEvent(QMouseEvent *);
+  void mousePressEvent(QMouseEvent *) override;
 
   //! handle mouse move event
-  void mouseMoveEvent(QMouseEvent *);
+  void mouseMoveEvent(QMouseEvent *) override;
 
   //! handle mouse release event
-  void mouseReleaseEvent(QMouseEvent *);
+  void mouseReleaseEvent(QMouseEvent *) override;
 
   //! handle drag enter
-  void dragEnterEvent(QDragEnterEvent *event);
+  void dragEnterEvent(QDragEnterEvent *event) override;
 
   //! handle drag move
-  void dragMoveEvent(QDragMoveEvent *event);
+  void dragMoveEvent(QDragMoveEvent *event) override;
 
   //! handle drop
-  void dropEvent(QDropEvent *event);
+  void dropEvent(QDropEvent *event) override;
 
   //! check if drag valid
   bool dragValid(const QMimeData *m, QString &type, int &tabNum) const;
@@ -178,10 +178,10 @@ class CQTabBar : public QWidget {
   bool dragPosValid(const QString &type, const QPoint &pos) const;
 
   //! handle context menu event
-  void contextMenuEvent(QContextMenuEvent *e);
+  void contextMenuEvent(QContextMenuEvent *e) override;
 
   //! handle generic event
-  bool event(QEvent *e);
+  bool event(QEvent *e) override;
 
   //! show scroll buttons
   void showScrollButtons(bool show);

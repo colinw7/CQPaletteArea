@@ -38,7 +38,7 @@ class CQSplitterArea : public QWidget {
   void updateLayout();
 
  private:
-  void showEvent(QShowEvent *);
+  void showEvent(QShowEvent *) override;
 
  private:
   CQPaletteArea      *palette_;
@@ -62,14 +62,14 @@ class CQSplitterHandle : public QWidget {
 
   void updateState();
 
-  void mousePressEvent  (QMouseEvent *e);
-  void mouseMoveEvent   (QMouseEvent *e);
-  void mouseReleaseEvent(QMouseEvent *e);
+  void mousePressEvent  (QMouseEvent *e) override;
+  void mouseMoveEvent   (QMouseEvent *e) override;
+  void mouseReleaseEvent(QMouseEvent *e) override;
 
-  void enterEvent(QEvent *e);
-  void leaveEvent(QEvent *e);
+  void enterEvent(QEvent *e) override;
+  void leaveEvent(QEvent *e) override;
 
-  void paintEvent(QPaintEvent *);
+  void paintEvent(QPaintEvent *) override;
 
  private:
   struct MouseState {

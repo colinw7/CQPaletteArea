@@ -134,7 +134,7 @@ class CQPaletteArea : public CQDockArea {
   bool hideTitle() const { return hideTitle_; }
 
   bool isVisible() const { return visible_; }
-  void setVisible(bool visible);
+  void setVisible(bool visible) override;
 
   bool isExpanded() const { return expanded_; }
 
@@ -151,7 +151,7 @@ class CQPaletteArea : public CQDockArea {
   bool moveSplitter(int d);
 
   //! size hint
-  QSize sizeHint() const;
+  QSize sizeHint() const override;
 
  public slots:
   void expandSlot();
@@ -273,10 +273,10 @@ class CQPaletteArea : public CQDockArea {
   void updateTitle();
 
   //! handle resize
-  void resizeEvent(QResizeEvent *);
+  void resizeEvent(QResizeEvent *) override;
 
   //! handle move
-  void moveEvent(QMoveEvent *);
+  void moveEvent(QMoveEvent *) override;
 
  private slots:
   void updateSplitter();
@@ -348,7 +348,7 @@ class CQPaletteWindow : public QFrame {
   void setDetachToArea(bool detach) { detachToArea_ = detach; }
 
   bool isVisible() const { return visible_; }
-  void setVisible(bool visible);
+  void setVisible(bool visible) override;
 
   Qt::DockWidgetArea dockArea() const;
 
@@ -392,7 +392,7 @@ class CQPaletteWindow : public QFrame {
   QIcon getIcon() const;
 
   //! size hint
-  QSize sizeHint() const;
+  QSize sizeHint() const override;
 
  private slots:
   //! page of group has changed
@@ -460,7 +460,7 @@ class CQPaletteWindow : public QFrame {
 
   void updateTitle();
 
-  void resizeEvent(QResizeEvent *);
+  void resizeEvent(QResizeEvent *) override;
 
   void updateDetachSize();
 
@@ -514,24 +514,24 @@ class CQPaletteAreaTitle : public CQTitleBar {
  private:
   friend class CQPaletteArea;
 
-  QString title() const;
+  QString title() const override;
 
-  QIcon icon() const;
+  QIcon icon() const override;
 
   void updateDockArea();
 
-  void contextMenuEvent(QContextMenuEvent *e);
+  void contextMenuEvent(QContextMenuEvent *e) override;
 
   //! handle mouse events
-  void mousePressEvent  (QMouseEvent *e);
-  void mouseMoveEvent   (QMouseEvent *e);
-  void mouseReleaseEvent(QMouseEvent *e);
+  void mousePressEvent  (QMouseEvent *e) override;
+  void mouseMoveEvent   (QMouseEvent *e) override;
+  void mouseReleaseEvent(QMouseEvent *e) override;
 
   //! handle key events
-  void keyPressEvent(QKeyEvent *e);
+  void keyPressEvent(QKeyEvent *e) override;
 
   //! handle hover events
-  bool event(QEvent *e);
+  bool event(QEvent *e) override;
 
  private:
   void updateState();
@@ -582,8 +582,8 @@ class CQPaletteAreaNoTitle : public QWidget {
  public:
   CQPaletteAreaNoTitle(QWidget *parent=0);
 
-  QSize sizeHint() const;
-  QSize minimumSizeHint() const;
+  QSize sizeHint() const override;
+  QSize minimumSizeHint() const override;
 };
 
 //------
@@ -598,26 +598,26 @@ class CQPaletteWindowTitle : public CQTitleBar {
  private:
   friend class CQPaletteWindow;
 
-  QString title() const;
+  QString title() const override;
 
-  QIcon icon() const;
+  QIcon icon() const override;
 
   void updateDockArea();
 
   void updateState();
 
-  void contextMenuEvent(QContextMenuEvent *e);
+  void contextMenuEvent(QContextMenuEvent *e) override;
 
   //! handle mouse events
-  void mousePressEvent  (QMouseEvent *e);
-  void mouseMoveEvent   (QMouseEvent *e);
-  void mouseReleaseEvent(QMouseEvent *e);
+  void mousePressEvent  (QMouseEvent *e) override;
+  void mouseMoveEvent   (QMouseEvent *e) override;
+  void mouseReleaseEvent(QMouseEvent *e) override;
 
   //! handle key events
-  void keyPressEvent(QKeyEvent *e);
+  void keyPressEvent(QKeyEvent *e) override;
 
   //! handle hover events
-  bool event(QEvent *e);
+  bool event(QEvent *e) override;
 
  private:
   //! mouse state

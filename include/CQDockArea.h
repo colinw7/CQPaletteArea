@@ -61,9 +61,9 @@ class CQDockArea : public QDockWidget {
   bool setIgnoreSize(bool ignore) { std::swap(ignoreSize_, ignore); return ignore; }
 
   // handle resize
-  void resizeEvent(QResizeEvent *);
+  void resizeEvent(QResizeEvent *) override;
 
-  bool eventFilter(QObject *obj, QEvent *event);
+  bool eventFilter(QObject *obj, QEvent *event) override;
 
   void handleEvent(QObject *obj, QEvent *event);
 

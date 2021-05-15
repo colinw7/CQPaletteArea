@@ -468,8 +468,8 @@ paintEvent(QPaintEvent *)
   baseStyle.initFrom(this);
 
   // calculate button geometry and first/last tab buttons
-  CQTabBarButton *firstButton = 0;
-  CQTabBarButton *lastButton  = 0;
+  CQTabBarButton *firstButton = nullptr;
+  CQTabBarButton *lastButton  = nullptr;
 
   int x = -xo;
 

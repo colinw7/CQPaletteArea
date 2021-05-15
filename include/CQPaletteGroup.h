@@ -82,7 +82,7 @@ class CQPaletteGroup : public QWidget {
 
   void getPages(PageArray &pages) const;
 
-  QSize sizeHint() const;
+  QSize sizeHint() const override;
 
  signals:
   void currentPageChanged(CQPaletteAreaPage *page);
@@ -101,9 +101,9 @@ class CQPaletteGroup : public QWidget {
 
   CQPaletteAreaPage *getPageForIndex(int ind) const;
 
-  void showEvent(QShowEvent *);
+  void showEvent(QShowEvent *) override;
 
-  void resizeEvent(QResizeEvent *);
+  void resizeEvent(QResizeEvent *) override;
 
  private:
   typedef std::map<uint,CQPaletteAreaPage*> Pages;
@@ -133,9 +133,9 @@ class CQPaletteGroupTabBar : public CQTabBar {
 
   uint getPageId(int ind) const;
 
-  QSize sizeHint() const;
+  QSize sizeHint() const override;
 
-  QSize minimumSizeHint() const;
+  QSize minimumSizeHint() const override;
 
  private:
   CQPaletteGroup *group_;

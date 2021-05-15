@@ -26,7 +26,7 @@ class CQPalettePreview : public QObject {
   void stopPreview();
 
  private:
-  bool eventFilter(QObject *obj, QEvent *event);
+  bool eventFilter(QObject *obj, QEvent *event) override;
 
   bool processEvent(QObject *obj, QEvent *event);
 
