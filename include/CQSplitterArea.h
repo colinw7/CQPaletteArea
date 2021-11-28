@@ -41,12 +41,12 @@ class CQSplitterArea : public QWidget {
   void showEvent(QShowEvent *) override;
 
  private:
-  CQPaletteArea      *palette_;
-  Qt::DockWidgetArea  dockArea_;
-  bool                resizable_;
-  bool                floating_;
-  QSplitter          *splitter_;
-  CQSplitterHandle   *handle_;
+  CQPaletteArea      *palette_   { nullptr };
+  Qt::DockWidgetArea  dockArea_  { Qt::LeftDockWidgetArea };
+  bool                resizable_ { true };
+  bool                floating_  { false };
+  QSplitter          *splitter_  { nullptr };
+  CQSplitterHandle   *handle_    { nullptr };
 };
 
 class CQSplitterHandle : public QWidget {
@@ -81,9 +81,9 @@ class CQSplitterHandle : public QWidget {
     }
   };
 
-  CQSplitterArea *area_;
+  CQSplitterArea *area_      { nullptr };
   MouseState      mouseState_;
-  bool            mouseOver_;
+  bool            mouseOver_ { false };
 };
 
 #endif

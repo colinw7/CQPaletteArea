@@ -12,8 +12,7 @@
 
 CQSplitterArea::
 CQSplitterArea(CQPaletteArea *palette) :
- QWidget(0), palette_(palette), dockArea_(Qt::LeftDockWidgetArea),
- resizable_(true), floating_(false)
+ QWidget(nullptr), palette_(palette)
 {
   splitter_ = new QSplitter(this);
 
@@ -117,7 +116,7 @@ updateLayout()
 
 CQSplitterHandle::
 CQSplitterHandle(CQSplitterArea *area) :
- QWidget(0), area_(area)
+ QWidget(nullptr), area_(area)
 {
   setObjectName("handle");
 
