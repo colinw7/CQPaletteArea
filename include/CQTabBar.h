@@ -221,24 +221,29 @@ class CQTabBar : public QWidget {
   void rscrollSlot();
 
  private:
-  typedef std::vector<CQTabBarButton *> TabButtons;
+  using TabButtons = std::vector<CQTabBarButton *>;
 
-  TabButtons            buttons_;      //! tab page buttons
-  int                   currentIndex_; //! current tab index (-1 if none)
-  Position              position_;     //! tab position (relative to contents)
-  bool                  allowNoTab_;   //! allow no current tab
-  Qt::ToolButtonStyle   buttonStyle_;  //! tab button style (text and/or icon)
-  CQTabBarScrollButton *lscroll_;      //! left/bottom scroll button if clipped
-  CQTabBarScrollButton *rscroll_;      //! right/top scroll button if clipped
-  QSize                 iconSize_;     //! icon size
-  mutable int           iw_, w_, h_;   //! tab bar icon width, width and height
-  mutable int           clipNum_;      //! first item clipped (-1 if none)
-  mutable int           offset_;       //! scroll offset
-  mutable bool          pressed_;      //! button pressed
-  mutable QPoint        pressPos_;     //! button press pos (for drag)
-  mutable int           pressIndex_;   //! tab at press position
-  mutable int           moveIndex_;    //! tab at current mouse position
+  TabButtons            buttons_;                  //! tab page buttons
+  int                   currentIndex_ { -1 };      //! current tab index (-1 if none)
+  Position              position_     { North };   //! tab position (relative to contents)
+  bool                  allowNoTab_   { false };   //! allow no current tab
+  Qt::ToolButtonStyle   buttonStyle_  { Qt::ToolButtonIconOnly };
+                                                   //! tab button style (text and/or icon)
+  CQTabBarScrollButton *lscroll_      { nullptr }; //! left/bottom scroll button if clipped
+  CQTabBarScrollButton *rscroll_      { nullptr }; //! right/top scroll button if clipped
+  QSize                 iconSize_     { 16, 16 };  //! icon size
+  mutable int           iw_           { 0 };       //! tab bar icon width
+  mutable int           w_            { 0 };       //! tab bar width
+  mutable int           h_            { 0 };       //! tab bar height
+  mutable int           clipNum_      { -1 };      //! first item clipped (-1 if none)
+  mutable int           offset_       { 0 };       //! scroll offset
+  mutable bool          pressed_      { false };   //! button pressed
+  mutable QPoint        pressPos_;                 //! button press pos (for drag)
+  mutable int           pressIndex_   { -1 };      //! tab at press position
+  mutable int           moveIndex_    { -1 };      //! tab at current mouse position
 };
+
+//---
 
 /*! base class for tab bar button
 */
@@ -301,19 +306,23 @@ class CQTabBarButton {
   int width() const;
 
  private:
-  CQTabBar                   *bar_;          //! icon position
-  int                         index_;        //! index
-  QString                     text_;         //! text
-  QIcon                       icon_;         //! icon
-  QVariant                    data_;         //! data
-  mutable QIcon               positionIcon_; //! icon for position (cached)
-  mutable CQTabBar::Position  iconPosition_; //! position used for above (cached)
-  QString                     toolTip_;      //! tooltip
-  QWidget                    *w_;            //! associated widget
-  bool                        visible_;      //! is visible
-  bool                        pending_;      //! is pending
-  QRect                       r_;            //! bounding box
+  using Position = CQTabBar::Position;
+
+  CQTabBar*        bar_          { nullptr };         //! icon position
+  int              index_        { 0 };               //! index
+  QString          text_;                             //! text
+  QIcon            icon_;                             //! icon
+  QVariant         data_;                             //! data
+  mutable QIcon    positionIcon_;                     //! icon for position (cached)
+  mutable Position iconPosition_ { CQTabBar::North }; //! position used for above (cached)
+  QString          toolTip_;                          //! tooltip
+  QWidget*         w_            { nullptr };         //! associated widget
+  bool             visible_      { true };            //! is visible
+  bool             pending_      { false };           //! is pending
+  QRect            r_;                                //! bounding box
 };
+
+//---
 
 /*! internal class for tab bar scroll button
 */

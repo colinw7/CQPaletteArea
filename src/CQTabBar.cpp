@@ -22,9 +22,7 @@ static const char *mimeTabId  = "CQTabBarMimeTabId";
 // create tab bar
 CQTabBar::
 CQTabBar(QWidget *parent) :
- QWidget(parent), currentIndex_(-1), position_(North), allowNoTab_(false),
- buttonStyle_(Qt::ToolButtonIconOnly), iconSize_(16,16), iw_(0), w_(0), h_(0),
- clipNum_(-1), offset_(0), pressed_(false), pressIndex_(-1), moveIndex_(-1)
+ QWidget(parent)
 {
   setObjectName("tabBar");
 
@@ -63,7 +61,7 @@ CQTabBar::
 addTab(const QIcon &icon, const QString &text, QWidget *w)
 {
   // create button
-  CQTabBarButton *button = new CQTabBarButton(this);
+  auto *button = new CQTabBarButton(this);
 
   button->setText  (text);
   button->setIcon  (icon);
@@ -96,7 +94,7 @@ CQTabBar::
 insertTab(int ind, const QIcon &icon, const QString &text, QWidget *w)
 {
   // create button
-  CQTabBarButton *button = new CQTabBarButton(this);
+  auto *button = new CQTabBarButton(this);
 
   button->setText  (text);
   button->setIcon  (icon);
@@ -826,11 +824,11 @@ mouseMoveEvent(QMouseEvent *e)
       QIcon icon = (button ? button->icon() : QIcon());
 
       // initiate drag
-      QDrag *drag = new QDrag(this);
+      auto *drag = new QDrag(this);
 
       drag->setPixmap(icon.pixmap(iconSize()));
 
-      QMimeData *mimeData = new QMimeData;
+      auto *mimeData = new QMimeData;
 
       // use unique id for our mime data and store source palette type
       QString numStr = QString("%1").arg(pressIndex_);
@@ -1072,9 +1070,7 @@ isVertical() const
 // create tab button
 CQTabBarButton::
 CQTabBarButton(CQTabBar *bar) :
- bar_(bar), index_(0), text_(), icon_(), positionIcon_(),
- iconPosition_(CQTabBar::North), toolTip_(), w_(0), visible_(true),
- pending_(false), r_()
+ bar_(bar)
 {
 }
 
