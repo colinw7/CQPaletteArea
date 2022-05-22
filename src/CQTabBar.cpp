@@ -43,8 +43,18 @@ CQTabBar(QWidget *parent) :
 CQTabBar::
 ~CQTabBar()
 {
-  for (TabButtons::iterator p = buttons_.begin(); p != buttons_.end(); ++p)
-    delete *p;
+  clear();
+}
+
+// clear tab bar
+void
+CQTabBar::
+clear()
+{
+  for (auto *button : buttons_)
+    delete button;
+
+  buttons_.clear();
 }
 
 // add tab for widget with specified text
@@ -109,12 +119,12 @@ insertTab(int ind, CQTabBarButton *button)
 {
   buttons_.push_back(0);
 
-  for (int i = buttons_.size() - 1; i > ind; --i)
-    buttons_[i] = buttons_[i - 1];
+  for (int i = int(buttons_.size() - 1); i > ind; --i)
+    buttons_[size_t(i)] = buttons_[size_t(i - 1)];
 
-  buttons_[ind] = button;
+  buttons_[size_t(ind)] = button;
 
-  int index = buttons_.size();
+  int index = int(buttons_.size());
 
   button->setIndex(index);
 
@@ -149,9 +159,9 @@ removeTab(int ind)
 {
   int pos = tabButtonPos(ind);
 
-  CQTabBarButton *button = buttons_[pos];
+  auto *button = buttons_[size_t(pos)];
 
-  buttons_[pos] = 0;
+  buttons_[size_t(pos)] = 0;
 
   delete button;
 
@@ -173,7 +183,7 @@ count() const
   int n = 0;
 
   for (TabButtons::const_iterator p = buttons_.begin(); p != buttons_.end(); ++p) {
-    CQTabBarButton *button = *p;
+    auto *button = *p;
     if (! button) continue;
 
     ++n;
@@ -190,7 +200,7 @@ tabInd(int i) const
   int n = 0;
 
   for (TabButtons::const_iterator p = buttons_.begin(); p != buttons_.end(); ++p) {
-    CQTabBarButton *button = *p;
+    auto *button = *p;
     if (! button) continue;
 
     if (n == i)
@@ -208,7 +218,7 @@ CQTabBar::
 setCurrentIndex(int ind)
 {
   // button array can contain empty slots so ensure the requested one is valid
-  CQTabBarButton *button = tabButton(ind);
+  auto *button = tabButton(ind);
   if (! button) return;
 
   // process if changed
@@ -231,7 +241,7 @@ CQTabBar::
 getTabIndex(QWidget *w) const
 {
   for (TabButtons::const_iterator p = buttons_.begin(); p != buttons_.end(); ++p) {
-    CQTabBarButton *button = *p;
+    auto *button = *p;
 
     if (button && button->widget() == w)
       return button->index();
@@ -281,7 +291,7 @@ void
 CQTabBar::
 setTabText(int ind, const QString &text)
 {
-  CQTabBarButton *button = tabButton(ind);
+  auto *button = tabButton(ind);
 
   if (button)
     button->setText(text);
@@ -296,7 +306,7 @@ void
 CQTabBar::
 setTabIcon(int ind, const QIcon &icon)
 {
-  CQTabBarButton *button = tabButton(ind);
+  auto *button = tabButton(ind);
 
   if (button)
     button->setIcon(icon);
@@ -311,7 +321,7 @@ void
 CQTabBar::
 setTabToolTip(int ind, const QString &tip)
 {
-  CQTabBarButton *button = tabButton(ind);
+  auto *button = tabButton(ind);
 
   if (button)
     button->setToolTip(tip);
@@ -322,7 +332,7 @@ void
 CQTabBar::
 setTabVisible(int ind, bool visible)
 {
-  CQTabBarButton *button = tabButton(ind);
+  auto *button = tabButton(ind);
 
   if (button)
     button->setVisible(visible);
@@ -337,7 +347,7 @@ void
 CQTabBar::
 setTabPending(int ind, bool pending)
 {
-  CQTabBarButton *button = tabButton(ind);
+  auto *button = tabButton(ind);
 
   if (button)
     button->setPending(pending);
@@ -350,7 +360,7 @@ void
 CQTabBar::
 setTabData(int ind, const QVariant &data)
 {
-  CQTabBarButton *button = tabButton(ind);
+  auto *button = tabButton(ind);
 
   if (button)
     button->setData(data);
@@ -361,7 +371,7 @@ QVariant
 CQTabBar::
 tabData(int ind) const
 {
-  CQTabBarButton *button = tabButton(ind);
+  auto *button = tabButton(ind);
 
   if (button)
     return button->data();
@@ -375,7 +385,7 @@ CQTabBar::
 tabButton(int ind) const
 {
   for (TabButtons::const_iterator p = buttons_.begin(); p != buttons_.end(); ++p) {
-    CQTabBarButton *button = *p;
+    auto *button = *p;
 
     if (button && button->index() == ind)
       return button;
@@ -390,7 +400,7 @@ CQTabBar::
 tabButtonPos(int ind) const
 {
   for (int i = 0; i < int(buttons_.size()); ++i) {
-    CQTabBarButton *button = buttons_[i];
+    auto *button = buttons_[size_t(i)];
 
     if (button && button->index() == ind)
       return i;
@@ -406,7 +416,7 @@ QWidget *
 CQTabBar::
 tabWidget(int ind) const
 {
-  CQTabBarButton *button = tabButton(ind);
+  auto *button = tabButton(ind);
 
   if (button)
     return button->widget();
@@ -430,7 +440,7 @@ paintEvent(QPaintEvent *)
     int offset = offset_;
 
     for (TabButtons::const_iterator p = buttons_.begin(); offset > 0 && p != buttons_.end(); ++p) {
-      CQTabBarButton *button = *p;
+      auto *button = *p;
 
       if (! button || ! button->visible()) continue;
 
@@ -472,7 +482,7 @@ paintEvent(QPaintEvent *)
   int x = -xo;
 
   for (TabButtons::const_iterator p = buttons_.begin(); p != buttons_.end(); ++p) {
-    CQTabBarButton *button = *p;
+    auto *button = *p;
 
     if (! button || ! button->visible()) continue;
 
@@ -523,7 +533,7 @@ paintEvent(QPaintEvent *)
   x = -xo;
 
   for (TabButtons::const_iterator p = buttons_.begin(); p != buttons_.end(); ++p) {
-    CQTabBarButton *button = *p;
+    auto *button = *p;
 
     if (! button || ! button->visible()) continue;
 
@@ -616,7 +626,7 @@ updateSizes()
   clipNum_ = 0;
 
   for (TabButtons::const_iterator p = buttons_.begin(); p != buttons_.end(); ++p) {
-    CQTabBarButton *button = *p;
+    auto *button = *p;
 
     if (! button || ! button->visible()) continue;
 
@@ -724,12 +734,12 @@ CQTabBar::
 event(QEvent *e)
 {
   if (e->type() == QEvent::ToolTip) {
-    QHelpEvent *helpEvent = static_cast<QHelpEvent *>(e);
+    auto *helpEvent = static_cast<QHelpEvent *>(e);
 
     int ind = tabAt(helpEvent->pos());
 
     if (ind != -1) {
-      CQTabBarButton *button = tabButton(ind);
+      auto *button = tabButton(ind);
 
       if (button)
         QToolTip::showText(helpEvent->globalPos(), button->toolTip());
@@ -759,7 +769,7 @@ sizeHint() const
   int w = 0;
 
   for (TabButtons::const_iterator p = buttons_.begin(); p != buttons_.end(); ++p) {
-    CQTabBarButton *button = *p;
+    auto *button = *p;
 
     if (! button || ! button->visible()) continue;
 
@@ -777,7 +787,7 @@ QSize
 CQTabBar::
 minimumSizeHint() const
 {
-  QSize s = sizeHint();
+  auto s = sizeHint();
 
   if (isVertical())
     return QSize(s.width(), 0);
@@ -819,9 +829,9 @@ mouseMoveEvent(QMouseEvent *e)
   if (e->buttons() & Qt::LeftButton) {
     // check drag distance
     if ((e->pos() - pressPos_).manhattanLength() >= QApplication::startDragDistance()) {
-      CQTabBarButton *button = tabButton(pressIndex_);
+      auto *button = tabButton(pressIndex_);
 
-      QIcon icon = (button ? button->icon() : QIcon());
+      auto icon = (button ? button->icon() : QIcon());
 
       // initiate drag
       auto *drag = new QDrag(this);
@@ -831,7 +841,7 @@ mouseMoveEvent(QMouseEvent *e)
       auto *mimeData = new QMimeData;
 
       // use unique id for our mime data and store source palette type
-      QString numStr = QString("%1").arg(pressIndex_);
+      auto numStr = QString("%1").arg(pressIndex_);
 
       mimeData->setData(mimeId    , dragId);
       mimeData->setData(mimeNameId, objectName().toLatin1());
@@ -935,11 +945,11 @@ dropEvent(QDropEvent *event)
     int pos1 = tabButtonPos(fromIndex);
     int pos2 = tabButtonPos(toIndex  );
 
-    CQTabBarButton *button1 = buttons_[pos1];
-    CQTabBarButton *button2 = buttons_[pos2];
+    auto *button1 = buttons_[size_t(pos1)];
+    auto *button2 = buttons_[size_t(pos2)];
 
-    buttons_[pos2] = button1;
-    buttons_[pos1] = button2;
+    buttons_[size_t(pos2)] = button1;
+    buttons_[size_t(pos1)] = button2;
 
     button1->setIndex(toIndex);
     button2->setIndex(fromIndex);
@@ -964,7 +974,7 @@ CQTabBar::
 dragValid(const QMimeData *m, QString &name, int &num) const
 {
   // Only accept if it's our request
-  QStringList formats = m->formats();
+  auto formats = m->formats();
 
   if (! formats.contains(mimeId) || m->data(mimeId) != dragId)
     return false;
@@ -974,11 +984,11 @@ dragValid(const QMimeData *m, QString &name, int &num) const
 
   name = m->data(mimeNameId).data();
 
-  QString numStr = m->data(mimeTabId).data();
+  auto *numStr = m->data(mimeTabId).data();
 
   bool ok;
 
-  num = numStr.toInt(&ok);
+  num = QString(numStr).toInt(&ok);
 
   assert(ok);
 
@@ -1007,7 +1017,7 @@ CQTabBar::
 tabAt(const QPoint &point) const
 {
   for (TabButtons::const_iterator p = buttons_.begin(); p != buttons_.end(); ++p) {
-    CQTabBarButton *button = *p;
+    auto *button = *p;
 
     if (! button || ! button->visible()) continue;
 
@@ -1117,7 +1127,7 @@ positionIcon(CQTabBar::Position pos) const
 
   QTransform t;
 
-  QPixmap p = pixmap();
+  auto p = pixmap();
 
   t.rotate(iconPosition_ == CQTabBar::West ? 90 : -90);
 
@@ -1194,7 +1204,7 @@ width() const
 
   //------
 
-  Qt::ToolButtonStyle buttonStyle = bar_->buttonStyle();
+  auto buttonStyle = bar_->buttonStyle();
 
   int w = 0;
 

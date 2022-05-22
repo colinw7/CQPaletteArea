@@ -45,22 +45,25 @@ class CQTabBar : public QWidget {
 
  public:
   //! create tab bar
-  CQTabBar(QWidget *parent=0);
+  CQTabBar(QWidget *parent=nullptr);
 
   //! delete tab bar
  ~CQTabBar();
 
+  //! clear tabs
+  void clear();
+
   //! add tab for specified text and widget
-  int addTab(const QString &text, QWidget *widget=0);
+  int addTab(const QString &text, QWidget *widget=nullptr);
   //! add tab for specified text, icon and widget
-  int addTab(const QIcon &icon, const QString &text, QWidget *widget=0);
+  int addTab(const QIcon &icon, const QString &text, QWidget *widget=nullptr);
   //! add tab with specified button
   int addTab(CQTabBarButton *button);
 
   //! insert tab for specified text and widget
-  int insertTab(int ind, const QString &text, QWidget *widget=0);
+  int insertTab(int ind, const QString &text, QWidget *widget=nullptr);
   //! insert tab for specified text, icon and widget
-  int insertTab(int ind, const QIcon &icon, const QString &text, QWidget *widget=0);
+  int insertTab(int ind, const QIcon &icon, const QString &text, QWidget *widget=nullptr);
   //! insert tab with specified button
   int insertTab(int ind, CQTabBarButton *button);
 
