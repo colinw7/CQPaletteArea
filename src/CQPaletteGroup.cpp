@@ -226,7 +226,7 @@ CQPaletteGroup::
 setCurrentPage(CQPaletteAreaPage *page)
 {
   for (int i = 0; i < tabbar_->count(); ++i) {
-    uint ind = tabbar_->tabInd(i);
+    int ind = tabbar_->tabInd(i);
 
     uint id = tabbar_->getPageId(ind);
 
@@ -260,14 +260,14 @@ getPage(int i) const
 
   getPages(pages);
 
-  return pages[i];
+  return pages[uint(i)];
 }
 
 uint
 CQPaletteGroup::
 numPages() const
 {
-  int num = 0;
+  uint num = 0;
 
   for (Pages::const_iterator p = pages_.begin(); p != pages_.end(); ++p) {
     CQPaletteAreaPage *page = (*p).second;

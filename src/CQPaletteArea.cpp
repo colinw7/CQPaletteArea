@@ -20,6 +20,7 @@
 #include <QKeyEvent>
 #include <QMenu>
 #include <QTimer>
+#include <QScreen>
 
 #include <cassert>
 #include <iostream>
@@ -417,7 +418,7 @@ CQPaletteWindow *
 CQPaletteArea::
 addWindow()
 {
-  CQPaletteWindow *window = new CQPaletteWindow(this, windowId_++);
+  auto *window = new CQPaletteWindow(this, uint(windowId_++));
 
   addWindow(window);
 
@@ -486,10 +487,10 @@ addWindowAtPos(CQPaletteWindow *window, const QPoint &gpos)
       else if (y >= tol && y <= h - tol) {
         CQPaletteWindow *window1 = qobject_cast<CQPaletteWindow *>(widget);
 
-        int numPages = window->group()->numPages();
+        auto numPages = window->group()->numPages();
 
-        for (int j = 0; j < numPages; ++j)
-          window1->addPage(window->group()->getPage(j));
+        for (uint j = 0; j < numPages; ++j)
+          window1->addPage(window->group()->getPage(int(j)));
 
         window1->setCurrentPage(window->group()->getPage(0));
 
@@ -517,10 +518,10 @@ addWindowAtPos(CQPaletteWindow *window, const QPoint &gpos)
       else if (x >= tol && x <= w - tol) {
         CQPaletteWindow *window1 = qobject_cast<CQPaletteWindow *>(widget);
 
-        int numPages = window->group()->numPages();
+        auto numPages = window->group()->numPages();
 
-        for (int j = 0; j < numPages; ++j)
-          window1->addPage(window->group()->getPage(j));
+        for (uint j = 0; j < numPages; ++j)
+          window1->addPage(window->group()->getPage(int(j)));
 
         window->deleteLater();
 
@@ -560,11 +561,11 @@ removeWindow(CQPaletteWindow *window)
 {
   int ind = -1;
 
-  int nw = numWindows();
+  auto nw = numWindows();
 
-  for (int i = 0; i < nw; ++i) {
+  for (uint i = 0; i < nw; ++i) {
     if (ind < 0)
-      ind = (windows_[i] == window ? i : -1);
+      ind = (windows_[i] == window ? int(i) : -1);
     else
       windows_[i - 1] = windows_[i];
   }
@@ -1296,7 +1297,11 @@ getDetachPos(int w, int h) const
 {
   static int detachPos = 16;
 
+#if 0
   const QRect &screenRect = QApplication::desktop()->availableGeometry();
+#else
+  QRect screenRect = QApplication::screens().at(0)->availableGeometry();
+#endif
 
   if (detachPos + w >= screenRect.right () ||
       detachPos + h >= screenRect.bottom())
@@ -1566,7 +1571,7 @@ CQPaletteWindow(CQPaletteArea *area, uint id) :
 {
   setObjectName(QString("window_%1").arg(id_));
 
-  setFrameStyle(QFrame::NoFrame | QFrame::Plain);
+  setFrameStyle(uint(QFrame::NoFrame) | uint(QFrame::Plain));
   setLineWidth(2);
 
   QGridLayout *layout = new QGridLayout(this);
@@ -1834,9 +1839,9 @@ setDetached(bool detached)
     setFloating(false);
 
   if (detached_)
-    setFrameStyle(QFrame::Panel | QFrame::Raised);
+    setFrameStyle(uint(QFrame::Panel) | uint(QFrame::Raised));
   else
-    setFrameStyle(QFrame::NoFrame | QFrame::Plain);
+    setFrameStyle(uint(QFrame::NoFrame) | uint(QFrame::Plain));
 
   updateTitle();
 

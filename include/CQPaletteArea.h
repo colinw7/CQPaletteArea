@@ -106,7 +106,7 @@ class CQPaletteArea : public CQDockArea {
   Q_PROPERTY(bool        floating    READ isFloating)
   Q_PROPERTY(bool        detached    READ isDetached)
 
-  Q_ENUMS(WindowState);
+  Q_ENUMS(WindowState)
 
  public:
   enum WindowState {
@@ -181,7 +181,7 @@ class CQPaletteArea : public CQDockArea {
 
   const Windows &windows() const { return windows_; }
 
-  uint numWindows() const { return windows_.size(); }
+  uint numWindows() const { return uint(windows_.size()); }
 
   uint numVisibleWindows() const;
 
