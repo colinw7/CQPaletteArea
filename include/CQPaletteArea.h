@@ -83,8 +83,8 @@ class CQPaletteAreaMgr : public QObject {
   friend class CQPaletteWindow;
   friend class CQPaletteAreaTitle;
 
-  typedef std::vector<CQPaletteArea *>       Areas;
-  typedef std::map<Qt::DockWidgetArea,Areas> Palettes;
+  typedef std::vector<CQPaletteArea *>        Areas;
+  typedef std::map<Qt::DockWidgetArea, Areas> Palettes;
 
   QMainWindow   *window_;     //! parent main window
   Palettes       palettes_;   //! list of palettes (one per area)

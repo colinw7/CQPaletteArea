@@ -1209,11 +1209,11 @@ width() const
   int w = 0;
 
   if      (buttonStyle == Qt::ToolButtonTextOnly)
-    w = fm.width(text()) + 24;
+    w = fm.horizontalAdvance(text()) + 24;
   else if (buttonStyle == Qt::ToolButtonIconOnly)
     w = bar_->iconWidth() + 24;
   else
-    w = bar_->iconWidth() + fm.width(text()) + 32;
+    w = bar_->iconWidth() + fm.horizontalAdvance(text()) + 32;
 
   return w;
 }

@@ -84,7 +84,8 @@ updateLayout()
   if (handle_->isVisible()) {
     QWidget *cw = mw->centralWidget();
 
-//std::cerr << "CW: " << cw->x() << " " << cw->y() << " " << cw->width() << " " << cw->height() << std::endl;
+    //std::cerr << "CW: " << cw->x() << " " << cw->y() << " " <<
+    //             cw->width() << " " << cw->height() << std::endl;
 
     int hs = (isVerticalDockArea() ? handle_->width() : handle_->height());
 
@@ -152,7 +153,7 @@ paintEvent(QPaintEvent *)
   QStyleOption opt;
 
 #if 0
-  ps.fillRect(rect(), QBrush(QColor(100,100,150)));
+  ps.fillRect(rect(), QBrush(QColor(100, 100, 150)));
 #else
   opt.initFrom(this);
 

@@ -14,7 +14,7 @@ class CQWidgetResizer : public QObject {
   enum Action {
     Move   = (1<<0),
     Resize = (1<<1),
-    Any    = Move|Resize
+    Any    = Move | Resize
   };
 
   explicit CQWidgetResizer(QWidget *parent, QWidget *cw = 0);

@@ -106,7 +106,7 @@ class CQPaletteGroup : public QWidget {
   void resizeEvent(QResizeEvent *) override;
 
  private:
-  typedef std::map<uint,CQPaletteAreaPage*> Pages;
+  typedef std::map<uint, CQPaletteAreaPage*> Pages;
 
   CQPaletteWindow      *window_;
   CQPaletteGroupTabBar *tabbar_;

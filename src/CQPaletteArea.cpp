@@ -361,7 +361,7 @@ CQPaletteArea(CQPaletteAreaMgr *mgr, Qt::DockWidgetArea dockArea) :
   setAllowedAreas(dockArea);
 
   if      (isVerticalDockArea())
-    setFeatures(0);
+    setFeatures(QDockWidget::DockWidgetFeatures());
   else if (isHorizontalDockArea())
     setFeatures(QDockWidget::DockWidgetVerticalTitleBar);
 
@@ -712,7 +712,7 @@ updateDockArea()
   setAllowedAreas(dockArea_);
 
   if      (isVerticalDockArea())
-    setFeatures(0);
+    setFeatures(QDockWidget::DockWidgetFeatures());
   else if (isHorizontalDockArea())
     setFeatures(QDockWidget::DockWidgetVerticalTitleBar);
 
@@ -1297,11 +1297,7 @@ getDetachPos(int w, int h) const
 {
   static int detachPos = 16;
 
-#if 0
-  const QRect &screenRect = QApplication::desktop()->availableGeometry();
-#else
-  QRect screenRect = QApplication::screens().at(0)->availableGeometry();
-#endif
+  QRect screenRect = CQWidgetUtil::desktopAvailableGeometry();
 
   if (detachPos + w >= screenRect.right () ||
       detachPos + h >= screenRect.bottom())
@@ -1566,7 +1562,7 @@ CQPaletteWindow::
 CQPaletteWindow(CQPaletteArea *area, uint id) :
  mgr_(area->mgr()), area_(area), id_(id), title_(0), group_(0), resizer_(0),
  windowState_(NormalState), newWindow_(0), parent_(0), parentPos_(-1), detachToArea_(true),
- visible_(true), expanded_(true), floating_(false), detached_(false), allowedAreas_(0),
+ visible_(true), expanded_(true), floating_(false), detached_(false), allowedAreas_(),
  detachWidth_(0), detachHeight_(0)
 {
   setObjectName(QString("window_%1").arg(id_));
@@ -2714,14 +2710,14 @@ QSize
 CQPaletteAreaNoTitle::
 sizeHint() const
 {
-  return QSize(1,1);
+  return QSize(1, 1);
 }
 
 QSize
 CQPaletteAreaNoTitle::
 minimumSizeHint() const
 {
-  return QSize(1,1);
+  return QSize(1, 1);
 }
 
 //------
