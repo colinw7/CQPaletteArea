@@ -153,7 +153,7 @@ class CQPaletteArea : public CQDockArea {
   //! size hint
   QSize sizeHint() const override;
 
- public slots:
+ public Q_SLOTS:
   void expandSlot();
   void collapseSlot();
 
@@ -278,7 +278,7 @@ class CQPaletteArea : public CQDockArea {
   //! handle move
   void moveEvent(QMoveEvent *) override;
 
- private slots:
+ private Q_SLOTS:
   void updateSplitter();
 
  private:
@@ -394,7 +394,7 @@ class CQPaletteWindow : public QFrame {
   //! size hint
   QSize sizeHint() const override;
 
- private slots:
+ private Q_SLOTS:
   //! page of group has changed
   void pageChangedSlot(CQPaletteAreaPage *);
 
@@ -464,7 +464,7 @@ class CQPaletteWindow : public QFrame {
 
   void updateDetachSize();
 
- public slots:
+ public Q_SLOTS:
   void dockLeftSlot();
   void dockRightSlot();
   void dockTopSlot();
@@ -536,7 +536,7 @@ class CQPaletteAreaTitle : public CQTitleBar {
  private:
   void updateState();
 
- private slots:
+ private Q_SLOTS:
   void attachSlot();
   void pinSlot();
   void expandSlot();
@@ -580,7 +580,7 @@ class CQPaletteAreaTitle : public CQTitleBar {
 
 class CQPaletteAreaNoTitle : public QWidget {
  public:
-  CQPaletteAreaNoTitle(QWidget *parent=0);
+  CQPaletteAreaNoTitle(QWidget *parent=nullptr);
 
   QSize sizeHint() const override;
   QSize minimumSizeHint() const override;

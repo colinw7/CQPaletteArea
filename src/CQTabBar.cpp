@@ -37,6 +37,10 @@ CQTabBar(QWidget *parent) :
 
   lscroll_->hide();
   rscroll_->hide();
+
+  //---
+
+  setContextMenuPolicy(Qt::DefaultContextMenu);
 }
 
 // delete tab bar
@@ -55,6 +59,8 @@ clear()
     delete button;
 
   buttons_.clear();
+
+  currentIndex_ = -1;
 }
 
 // add tab for widget with specified text
@@ -117,14 +123,14 @@ int
 CQTabBar::
 insertTab(int ind, CQTabBarButton *button)
 {
-  buttons_.push_back(0);
+  buttons_.push_back(nullptr);
 
   for (int i = int(buttons_.size() - 1); i > ind; --i)
     buttons_[size_t(i)] = buttons_[size_t(i - 1)];
 
   buttons_[size_t(ind)] = button;
 
-  int index = int(buttons_.size());
+  int index = int(buttons_.size()) - 1;
 
   button->setIndex(index);
 
@@ -161,7 +167,7 @@ removeTab(int ind)
 
   auto *button = buttons_[size_t(pos)];
 
-  buttons_[size_t(pos)] = 0;
+  buttons_[size_t(pos)] = nullptr;
 
   delete button;
 
@@ -182,7 +188,7 @@ count() const
 {
   int n = 0;
 
-  for (TabButtons::const_iterator p = buttons_.begin(); p != buttons_.end(); ++p) {
+  for (auto p = buttons_.begin(); p != buttons_.end(); ++p) {
     auto *button = *p;
     if (! button) continue;
 
@@ -199,7 +205,7 @@ tabInd(int i) const
 {
   int n = 0;
 
-  for (TabButtons::const_iterator p = buttons_.begin(); p != buttons_.end(); ++p) {
+  for (auto p = buttons_.begin(); p != buttons_.end(); ++p) {
     auto *button = *p;
     if (! button) continue;
 
@@ -231,7 +237,7 @@ setCurrentIndex(int ind)
 
     update();
 
-    emit currentChanged(currentIndex_);
+    Q_EMIT currentChanged(currentIndex_);
   }
 }
 
@@ -240,7 +246,7 @@ int
 CQTabBar::
 getTabIndex(QWidget *w) const
 {
-  for (TabButtons::const_iterator p = buttons_.begin(); p != buttons_.end(); ++p) {
+  for (auto p = buttons_.begin(); p != buttons_.end(); ++p) {
     auto *button = *p;
 
     if (button && button->widget() == w)
@@ -256,7 +262,8 @@ CQTabBar::
 setPosition(const Position &position)
 {
   // assert position is valid (just in case)
-  assert(position == North || position == South || position == West || position == East);
+  assert(position == Position::North || position == Position::South ||
+         position == Position::West || position == Position::East);
 
   position_ = position;
 
@@ -286,6 +293,16 @@ setButtonStyle(const Qt::ToolButtonStyle &buttonStyle)
   update();
 }
 
+// get tab text
+QString
+CQTabBar::
+tabText(int ind) const
+{
+  auto *button = tabButton(ind);
+
+  return (button ? button->text() : "");
+}
+
 // set tab text
 void
 CQTabBar::
@@ -299,6 +316,15 @@ setTabText(int ind, const QString &text)
   updateSizes();
 
   update();
+}
+
+QIcon
+CQTabBar::
+tabIcon(int ind) const
+{
+  auto *button = tabButton(ind);
+
+  return (button ? button->icon() : QIcon());
 }
 
 // set tab icon
@@ -316,6 +342,16 @@ setTabIcon(int ind, const QIcon &icon)
   update();
 }
 
+// get tab tooltip
+QString
+CQTabBar::
+tabToolTip(int index) const
+{
+  auto *button = tabButton(index);
+
+  return (button ? button->toolTip() : "");
+}
+
 // set tab tooltip
 void
 CQTabBar::
@@ -325,6 +361,16 @@ setTabToolTip(int ind, const QString &tip)
 
   if (button)
     button->setToolTip(tip);
+}
+
+// get tab visible
+bool
+CQTabBar::
+isTabVisible(int index) const
+{
+  auto *button = tabButton(index);
+
+  return (button ? button->visible() : false);
 }
 
 // set tab visible
@@ -342,6 +388,16 @@ setTabVisible(int ind, bool visible)
   update();
 }
 
+// get tab pending
+bool
+CQTabBar::
+isTabPending(int index) const
+{
+  auto *button = tabButton(index);
+
+  return (button ? button->pending() : false);
+}
+
 // set tab pending state
 void
 CQTabBar::
@@ -353,17 +409,6 @@ setTabPending(int ind, bool pending)
     button->setPending(pending);
 
   update();
-}
-
-// set tab data
-void
-CQTabBar::
-setTabData(int ind, const QVariant &data)
-{
-  auto *button = tabButton(ind);
-
-  if (button)
-    button->setData(data);
 }
 
 // get tab data
@@ -379,19 +424,30 @@ tabData(int ind) const
     return QVariant();
 }
 
+// set tab data
+void
+CQTabBar::
+setTabData(int ind, const QVariant &data)
+{
+  auto *button = tabButton(ind);
+
+  if (button)
+    button->setData(data);
+}
+
 // get button for tab
 CQTabBarButton *
 CQTabBar::
 tabButton(int ind) const
 {
-  for (TabButtons::const_iterator p = buttons_.begin(); p != buttons_.end(); ++p) {
+  for (auto p = buttons_.begin(); p != buttons_.end(); ++p) {
     auto *button = *p;
 
     if (button && button->index() == ind)
       return button;
   }
 
-  return 0;
+  return nullptr;
 }
 
 // get array pos for tab
@@ -421,7 +477,7 @@ tabWidget(int ind) const
   if (button)
     return button->widget();
 
-  return 0;
+  return nullptr;
 }
 
 // draw tab buttons
@@ -436,10 +492,10 @@ paintEvent(QPaintEvent *)
   // calculate width and height of region
   int xo = 0;
 
-  if (offset_ > 0) {
+  if (! isFlowTabs() && offset_ > 0) {
     int offset = offset_;
 
-    for (TabButtons::const_iterator p = buttons_.begin(); offset > 0 && p != buttons_.end(); ++p) {
+    for (auto p = buttons_.begin(); offset > 0 && p != buttons_.end(); ++p) {
       auto *button = *p;
 
       if (! button || ! button->visible()) continue;
@@ -480,27 +536,44 @@ paintEvent(QPaintEvent *)
   CQTabBarButton *lastButton  = nullptr;
 
   int x = -xo;
+  int y = 0;
 
-  for (TabButtons::const_iterator p = buttons_.begin(); p != buttons_.end(); ++p) {
+  for (auto p = buttons_.begin(); p != buttons_.end(); ++p) {
     auto *button = *p;
 
     if (! button || ! button->visible()) continue;
 
-    if (firstButton == 0)
+    // calc button width
+    int w1 = button->width();
+
+    // flow to next row if needed
+    if (isFlowTabs() && firstButton) {
+      if (isVertical()) {
+        if (x + w1 > h) {
+          x  = 0;
+          y += button->height();
+        }
+      }
+      else {
+        if (x + w1 > w) {
+          x  = 0;
+          y += button->height();
+        }
+      }
+    }
+
+    if (firstButton == nullptr)
       firstButton = button;
     else
       lastButton = button;
-
-    // calc button width
-    int w1 = button->width();
 
     // calculate and store button rectangle
     QRect r;
 
     if (isVertical())
-      r = QRect(0, x, h_, w1);
+      r = QRect(y, x, h_, w1);
     else
-      r = QRect(x, 0, w1, h_);
+      r = QRect(x, y, w1, h_);
 
     button->setRect(r);
 
@@ -513,14 +586,21 @@ paintEvent(QPaintEvent *)
     x += w1;
   }
 
+  if (firstButton)
+    y += firstButton->height();
+
+  buttonsHeight_ = y;
+
+  //---
+
   // draw tab base
-  if      (position_ == North)
-    baseStyle.rect = QRect(0, h_ - overlap, w, overlap);
-  else if (position_ == South)
+  if      (position_ == Position::North)
+    baseStyle.rect = QRect(0, buttonsHeight_ - overlap, w, overlap);
+  else if (position_ == Position::South)
     baseStyle.rect = QRect(0, 0, w, overlap);
-  else if (position_ == West)
-    baseStyle.rect = QRect(h_ - overlap, 0, overlap, h);
-  else if (position_ == East)
+  else if (position_ == Position::West)
+    baseStyle.rect = QRect(buttonsHeight_ - overlap, 0, overlap, h);
+  else if (position_ == Position::East)
     baseStyle.rect = QRect(0, 0, overlap, h);
 
   baseStyle.shape = getTabShape();
@@ -532,7 +612,7 @@ paintEvent(QPaintEvent *)
   // draw buttons
   x = -xo;
 
-  for (TabButtons::const_iterator p = buttons_.begin(); p != buttons_.end(); ++p) {
+  for (auto p = buttons_.begin(); p != buttons_.end(); ++p) {
     auto *button = *p;
 
     if (! button || ! button->visible()) continue;
@@ -580,8 +660,11 @@ paintEvent(QPaintEvent *)
     else
       tabStyle.position = QStyleOptionTab::Middle;
 
+    if (button->index() == currentIndex())
+      tabStyle.palette.setColor(QPalette::WindowText, palette().highlight().color());
+
     if (button->pending())
-      tabStyle.palette.setColor(QPalette::Button, QColor("#0000FF"));
+      tabStyle.palette.setColor(QPalette::Button, pendingColor());
 
     // draw button
     stylePainter.drawControl(QStyle::CE_TabBarTab, tabStyle);
@@ -592,8 +675,10 @@ paintEvent(QPaintEvent *)
   }
 
   // update scroll buttons
-  lscroll_->setEnabled(offset_ > 0);
-  rscroll_->setEnabled(offset_ < clipNum_);
+  if (! isFlowTabs()) {
+    lscroll_->setEnabled(offset_ > 0);
+    rscroll_->setEnabled(offset_ < clipNum_);
+  }
 }
 
 // handle resize
@@ -613,43 +698,79 @@ updateSizes()
   QFontMetrics fm(font());
 
   int iw = iconSize().width();
-  int h  = qMax(iw, fm.height()) + TAB_BORDER;
+  int bh = qMax(iw, fm.height()) + TAB_BORDER;
 
   // remove resize width
   if (isVertical())
-    h = qMin(h, width () - RESIZE_WIDTH);
+    bh = qMin(bh, width () - RESIZE_WIDTH);
   else
-    h = qMin(h, height() - RESIZE_WIDTH);
+    bh = qMin(bh, height() - RESIZE_WIDTH);
 
-  int w = 0;
+  int x  = 0;
+  int y  = 0;
+  int bw = 0;
+
+  int w = width ();
+  int h = height();
 
   clipNum_ = 0;
 
-  for (TabButtons::const_iterator p = buttons_.begin(); p != buttons_.end(); ++p) {
+  CQTabBarButton *firstButton = nullptr;
+
+  for (auto p = buttons_.begin(); p != buttons_.end(); ++p) {
     auto *button = *p;
 
     if (! button || ! button->visible()) continue;
 
-    w += button->width();
+    if (! firstButton)
+      firstButton = button;
+
+    bw = x + button->width();
 
     if (isVertical()) {
-      if (w > height())
-        ++clipNum_;
+      if (bw > h) {
+        if (isFlowTabs()) {
+          if (firstButton) {
+            x  = 0;
+            y += button->height();
+          }
+        }
+        else {
+          ++clipNum_;
+        }
+      }
     }
     else {
-      if (w > width())
-        ++clipNum_;
+      if (bw > w) {
+        if (isFlowTabs()) {
+          if (firstButton) {
+            x  = 0;
+            y += button->height();
+          }
+        }
+        else {
+          ++clipNum_;
+        }
+      }
     }
+
+    x += button->width();
   }
 
+  if (firstButton)
+    y += firstButton->height();
+
   iw_ = iw;
-  w_  = w;
-  h_  = h;
+  w_  = bw;
+  h_  = bh;
+
+  buttonsHeight_ = y;
 
   //-----
 
   // update scroll if clipped
-  showScrollButtons(clipNum_ > 0);
+  if (! isFlowTabs())
+    showScrollButtons(clipNum_ > 0);
 
   if (offset_ > clipNum_)
     offset_ = clipNum_;
@@ -768,7 +889,7 @@ sizeHint() const
 
   int w = 0;
 
-  for (TabButtons::const_iterator p = buttons_.begin(); p != buttons_.end(); ++p) {
+  for (auto p = buttons_.begin(); p != buttons_.end(); ++p) {
     auto *button = *p;
 
     if (! button || ! button->visible()) continue;
@@ -828,7 +949,8 @@ mouseMoveEvent(QMouseEvent *e)
   // If left button pressed check for drag
   if (e->buttons() & Qt::LeftButton) {
     // check drag distance
-    if ((e->pos() - pressPos_).manhattanLength() >= QApplication::startDragDistance()) {
+    if (pressIndex_ >= 0 &&
+        (e->pos() - pressPos_).manhattanLength() >= QApplication::startDragDistance()) {
       auto *button = tabButton(pressIndex_);
 
       auto icon = (button ? button->icon() : QIcon());
@@ -873,11 +995,11 @@ mouseReleaseEvent(QMouseEvent *e)
     if (! isCurrent)
       setCurrentIndex(pressIndex_); // will send currentChanged signal
     else
-      emit currentPressed(pressIndex_);
+      Q_EMIT currentPressed(pressIndex_);
   }
 
   // signal tab button pressed
-  emit tabPressedSignal(pressIndex_, ! isCurrent);
+  Q_EMIT tabPressedSignal(pressIndex_, ! isCurrent);
 
   // redraw
   update();
@@ -957,12 +1079,12 @@ dropEvent(QDropEvent *event)
     if      (fromIndex == currentIndex()) setCurrentIndex(toIndex);
     else if (toIndex   == currentIndex()) setCurrentIndex(fromIndex);
 
-    emit tabMoved(fromIndex, toIndex);
+    Q_EMIT tabMoved(fromIndex, toIndex);
 
     event->acceptProposedAction();
   }
   else {
-    emit tabMovePageSignal(name, fromIndex, this->objectName(), toIndex);
+    Q_EMIT tabMovePageSignal(name, fromIndex, this->objectName(), toIndex);
 
     event->acceptProposedAction();
   }
@@ -987,10 +1109,8 @@ dragValid(const QMimeData *m, QString &name, int &num) const
   auto *numStr = m->data(mimeTabId).data();
 
   bool ok;
-
   num = QString(numStr).toInt(&ok);
-
-  assert(ok);
+  if (! ok) return false;
 
   return true;
 }
@@ -1016,7 +1136,7 @@ int
 CQTabBar::
 tabAt(const QPoint &point) const
 {
-  for (TabButtons::const_iterator p = buttons_.begin(); p != buttons_.end(); ++p) {
+  for (auto p = buttons_.begin(); p != buttons_.end(); ++p) {
     auto *button = *p;
 
     if (! button || ! button->visible()) continue;
@@ -1051,7 +1171,7 @@ void
 CQTabBar::
 contextMenuEvent(QContextMenuEvent *e)
 {
-  emit showContextMenuSignal(e->globalPos());
+  Q_EMIT showContextMenuSignal(e->globalPos());
 }
 
 //! get tab shape for position
@@ -1060,11 +1180,11 @@ CQTabBar::
 getTabShape() const
 {
   switch (position_) {
-    case North: return QTabBar::RoundedNorth;
-    case South: return QTabBar::RoundedSouth;
-    case West : return QTabBar::RoundedWest;
-    case East : return QTabBar::RoundedEast;
-    default   : assert(false); return QTabBar::RoundedNorth;
+    case Position::North: return QTabBar::RoundedNorth;
+    case Position::South: return QTabBar::RoundedSouth;
+    case Position::West : return QTabBar::RoundedWest;
+    case Position::East : return QTabBar::RoundedEast;
+    default             : assert(false); return QTabBar::RoundedNorth;
   }
 }
 
@@ -1072,7 +1192,7 @@ bool
 CQTabBar::
 isVertical() const
 {
-  return (position_ == West || position_ == East);
+  return (position_ == Position::West || position_ == Position::East);
 }
 
 //-------
@@ -1100,8 +1220,8 @@ setIcon(const QIcon &icon)
   icon_ = icon;
 
   // ensure new icon causes recalc
-  if (iconPosition_ != CQTabBar::North && iconPosition_ != CQTabBar::South)
-    iconPosition_ = CQTabBar::North;
+  if (iconPosition_ != Position::North && iconPosition_ != Position::South)
+    iconPosition_ = Position::North;
 }
 
 // set button data
@@ -1117,7 +1237,7 @@ const QIcon &
 CQTabBarButton::
 positionIcon(CQTabBar::Position pos) const
 {
-  if (pos == CQTabBar::North || pos == CQTabBar::South)
+  if (pos == Position::North || pos == Position::South)
     return icon_;
 
   if (pos == iconPosition_)
@@ -1129,7 +1249,7 @@ positionIcon(CQTabBar::Position pos) const
 
   auto p = pixmap();
 
-  t.rotate(iconPosition_ == CQTabBar::West ? 90 : -90);
+  t.rotate(iconPosition_ == Position::West ? 90 : -90);
 
   positionIcon_ = QIcon(p.transformed(t));
 
@@ -1216,6 +1336,15 @@ width() const
     w = bar_->iconWidth() + fm.horizontalAdvance(text()) + 32;
 
   return w;
+}
+
+int
+CQTabBarButton::
+height() const
+{
+  QFontMetrics fm(bar_->font());
+
+  return fm.height() + TAB_BORDER;
 }
 
 //---------

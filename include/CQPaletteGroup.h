@@ -164,7 +164,7 @@ class CQPaletteAreaPage : public QObject {
   Q_OBJECT
 
  public:
-  CQPaletteAreaPage(QWidget *w=0);
+  CQPaletteAreaPage(QWidget *w=nullptr);
 
   virtual ~CQPaletteAreaPage() { }
 

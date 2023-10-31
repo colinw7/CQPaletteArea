@@ -267,7 +267,7 @@ getAreaAt(const QPoint &pos, Qt::DockWidgetAreas allowedAreas) const
     }
   }
 
-  return 0;
+  return nullptr;
 }
 
 void
@@ -411,7 +411,7 @@ getDockedWindow()
     if (! windows_[i]->isDetached())
       return windows_[i];
 
-  return 0;
+  return nullptr;
 }
 
 CQPaletteWindow *
@@ -577,9 +577,9 @@ removeWindow(CQPaletteWindow *window)
   // remove from splitter
   window->setVisible(false);
 
-  window->setParent(0);
+  window->setParent(nullptr);
 
-  window->setArea(0);
+  window->setArea(nullptr);
 
   updateTitle();
 
@@ -1139,11 +1139,11 @@ setWindowState(WindowState state)
   windowState_ = state;
 
   if      (windowState_ == NormalState)
-    setParent(0, Constants::normalFlags);
+    setParent(nullptr, Constants::normalFlags);
   else if (windowState_ == FloatingState)
-    setParent(0, Constants::floatingFlags);
+    setParent(nullptr, Constants::floatingFlags);
   else if (windowState_ == DetachedState)
-    setParent(0, Constants::detachedFlags);
+    setParent(nullptr, Constants::detachedFlags);
 }
 
 QRect
@@ -1156,7 +1156,7 @@ getHighlightRectAtPos(const QPoint &gpos) const
   int tol = Constants::splitter_tol;
 
   QRect    rect;
-  QWidget *widget = 0;
+  QWidget *widget = nullptr;
 
   for (int i = 0; i < splitter()->splitter()->count(); ++i) {
     widget = splitter()->splitter()->widget(i);
@@ -1179,7 +1179,7 @@ getHighlightRectAtPos(const QPoint &gpos) const
       else if (x >=     tol && x <= w - tol) { rect = QRect(tol    , 0, w - 2*tol, h); break; }
     }
 
-    widget = 0;
+    widget = nullptr;
   }
 
   if (! widget)
@@ -1560,10 +1560,10 @@ sizeHint() const
 
 CQPaletteWindow::
 CQPaletteWindow(CQPaletteArea *area, uint id) :
- mgr_(area->mgr()), area_(area), id_(id), title_(0), group_(0), resizer_(0),
- windowState_(NormalState), newWindow_(0), parent_(0), parentPos_(-1), detachToArea_(true),
- visible_(true), expanded_(true), floating_(false), detached_(false), allowedAreas_(),
- detachWidth_(0), detachHeight_(0)
+ mgr_(area->mgr()), area_(area), id_(id), title_(nullptr), group_(nullptr), resizer_(nullptr),
+ windowState_(NormalState), newWindow_(nullptr), parent_(nullptr), parentPos_(-1),
+ detachToArea_(true), visible_(true), expanded_(true), floating_(false), detached_(false),
+ allowedAreas_(), detachWidth_(0), detachHeight_(0)
 {
   setObjectName(QString("window_%1").arg(id_));
 
@@ -1729,11 +1729,11 @@ void
 CQPaletteWindow::
 updateLayout()
 {
-  QGridLayout *l = qobject_cast<QGridLayout *>(layout());
+  auto *l = qobject_cast<QGridLayout *>(layout());
 
   QLayoutItem *child;
 
-  while ((child = l->takeAt(0)) != 0)
+  while ((child = l->takeAt(0)) != nullptr)
     delete child;
 
   l->addWidget(title_, 0, 0);
@@ -1892,7 +1892,7 @@ setFloated(bool floating, const QPoint &pos, bool dragAll)
       resize(saveSize);
     }
     else {
-      newWindow_ = 0;
+      newWindow_ = nullptr;
       parentPos_ = area_->splitter()->splitter()->indexOf(this); // whole window
     }
 
@@ -1910,7 +1910,7 @@ setFloated(bool floating, const QPoint &pos, bool dragAll)
       move(detachPos, detachPos);
     }
 
-    if (newWindow_ == 0)
+    if (newWindow_ == nullptr)
       area_->updateSize();
   }
   else {
@@ -1993,9 +1993,9 @@ setWindowState(WindowState state)
   if      (windowState_ == NormalState)
     setParent(area_, Constants::normalFlags);
   else if (windowState_ == FloatingState)
-    setParent(0, Constants::floatingFlags);
+    setParent(nullptr, Constants::floatingFlags);
   else if (windowState_ == DetachedState)
-    setParent(0, Constants::detachedFlags);
+    setParent(nullptr, Constants::detachedFlags);
 }
 
 void
@@ -2269,7 +2269,7 @@ joinSlot()
 
   if (windows.size() <= 1) return;
 
-  CQPaletteWindow *joinWindow = 0;
+  CQPaletteWindow *joinWindow = nullptr;
 
   for (CQPaletteArea::Windows::const_iterator p = windows.begin(); p != windows.end(); ++p) {
     CQPaletteWindow *window = *p;
@@ -2369,7 +2369,7 @@ sizeHint() const
 
 CQPaletteAreaTitle::
 CQPaletteAreaTitle(CQPaletteArea *area) :
- area_(area), contextMenu_(0)
+ area_(area), contextMenu_(nullptr)
 {
   pinButton_    = addButton(QPixmap(pin_data));
   expandButton_ = addButton(QPixmap(left_triangle_data));
@@ -2724,11 +2724,11 @@ minimumSizeHint() const
 
 CQPaletteWindowTitle::
 CQPaletteWindowTitle(CQPaletteWindow *window) :
- window_(window), contextMenu_(0)
+ window_(window), contextMenu_(nullptr)
 {
   pinButton_    = addButton(QPixmap(pin_data));
   expandButton_ = addButton(QPixmap(left_triangle_data));
-  closeButton_  = addButton(style()->standardIcon(QStyle::SP_TitleBarCloseButton, 0, this));
+  closeButton_  = addButton(style()->standardIcon(QStyle::SP_TitleBarCloseButton, nullptr, this));
 
   connect(pinButton_   , SIGNAL(clicked()), window_, SLOT(togglePinSlot()));
   connect(expandButton_, SIGNAL(clicked()), window_, SLOT(toggleExpandSlot()));

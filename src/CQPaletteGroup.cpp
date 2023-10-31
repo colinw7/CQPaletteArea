@@ -58,7 +58,7 @@ getGroup(const QString &name) const
     if (groups_[i]->objectName() == name)
       return groups_[i];
 
-  return 0;
+  return nullptr;
 }
 
 CQPaletteGroup *
@@ -69,7 +69,7 @@ getGroupFromTabBar(const QString &name) const
     if (groups_[i]->tabbar()->objectName() == name)
       return groups_[i];
 
-  return 0;
+  return nullptr;
 }
 
 //-------
@@ -155,7 +155,7 @@ void
 CQPaletteGroup::
 removePage(CQPaletteAreaPage *page)
 {
-  page->setGroup(0);
+  page->setGroup(nullptr);
 
   page->setHidden(true);
 
@@ -209,7 +209,7 @@ currentPage() const
   int ind = tabbar_->currentIndex();
 
   if (ind < 0)
-    return 0;
+    return nullptr;
 
   return getPageForIndex(ind);
 }
@@ -338,7 +338,7 @@ getPageForIndex(int ind) const
   Pages::const_iterator p = pages_.find(id);
 
   if (p == pages_.end())
-    return 0;
+    return nullptr;
 
   return (*p).second;
 }
@@ -452,13 +452,13 @@ updateDockArea()
     setShape(QTabBar::RoundedSouth);
 #else
   if      (dockArea == Qt::LeftDockWidgetArea)
-    setPosition(CQTabBar::West);
+    setPosition(CQTabBar::Position::West);
   else if (dockArea == Qt::RightDockWidgetArea)
-    setPosition(CQTabBar::East);
+    setPosition(CQTabBar::Position::East);
   else if (dockArea == Qt::TopDockWidgetArea)
-    setPosition(CQTabBar::North);
+    setPosition(CQTabBar::Position::North);
   else if (dockArea == Qt::BottomDockWidgetArea)
-    setPosition(CQTabBar::South);
+    setPosition(CQTabBar::Position::South);
 #endif
 }
 
@@ -574,7 +574,7 @@ removePage(CQPaletteAreaPage *page)
 {
   removeWidget(page->widget());
 
-  page->widget()->setParent(0);
+  page->widget()->setParent(nullptr);
 }
 
 void

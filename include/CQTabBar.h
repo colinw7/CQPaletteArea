@@ -12,8 +12,6 @@ class CQTabBarButton;
 class CQTabBarScrollButton;
 
 /*!
- * \ingroup WinFWCore
- *
  * \brief Tab bar widget
  *
  * This widget differs from a normal QTabBar widget in the following ways:
@@ -23,10 +21,12 @@ class CQTabBarScrollButton;
 class CQTabBar : public QWidget {
   Q_OBJECT
 
-  Q_PROPERTY(Position            position    READ position    WRITE setPosition   )
-  Q_PROPERTY(bool                allowNoTab  READ allowNoTab  WRITE setAllowNoTab )
-  Q_PROPERTY(Qt::ToolButtonStyle buttonStyle READ buttonStyle WRITE setButtonStyle)
-  Q_PROPERTY(QSize               iconSize    READ iconSize    WRITE setIconSize   )
+  Q_PROPERTY(Position            position     READ position     WRITE setPosition)
+  Q_PROPERTY(bool                allowNoTab   READ allowNoTab   WRITE setAllowNoTab)
+  Q_PROPERTY(Qt::ToolButtonStyle buttonStyle  READ buttonStyle  WRITE setButtonStyle)
+  Q_PROPERTY(QSize               iconSize     READ iconSize     WRITE setIconSize)
+  Q_PROPERTY(bool                flowTabs     READ isFlowTabs   WRITE setFlowTabs)
+  Q_PROPERTY(QColor              pendingColor READ pendingColor WRITE setPendingColor)
 
   Q_ENUMS(Position)
 
@@ -35,8 +35,8 @@ class CQTabBar : public QWidget {
 
  public:
   // tab position
-  enum Position {
-    NoPos = 0,
+  enum class Position {
+    None  = 0,
     North = 1,
     South = 2,
     West  = 3,
@@ -49,6 +49,35 @@ class CQTabBar : public QWidget {
 
   //! delete tab bar
  ~CQTabBar();
+
+  //---
+
+  //! get tab position (relative to contents)
+  Position position() const { return position_; }
+  //! set tab position (relative to contents)
+  void setPosition(const Position &position);
+
+  //! get/set if allow no current tab
+  bool allowNoTab() const { return allowNoTab_; }
+  void setAllowNoTab(bool allowNoTab);
+
+  //! get/set button style (icon and/or text)
+  Qt::ToolButtonStyle buttonStyle() const { return buttonStyle_; }
+  void setButtonStyle(const Qt::ToolButtonStyle &buttonStyle);
+
+  //! get/set icon size
+  QSize iconSize() const;
+  void setIconSize(const QSize &size);
+
+  //! get/set flow tabs
+  bool isFlowTabs() const { return flowTabs_; }
+  void setFlowTabs(bool b) { flowTabs_ = b; }
+
+  //! get/set pending color
+  const QColor &pendingColor() const { return pendingColor_; }
+  void setPendingColor(const QColor &c) { pendingColor_ = c; update(); }
+
+  //---
 
   //! clear tabs
   void clear();
@@ -85,37 +114,27 @@ class CQTabBar : public QWidget {
   //! get tab index for widget
   int getTabIndex(QWidget *w) const;
 
-  //! get tab position (relative to contents)
-  Position position() const { return position_; }
-  //! set tab position (relative to contents)
-  void setPosition(const Position &position);
-
-  //! get if allow no current tab
-  bool allowNoTab() const { return allowNoTab_; }
-  //! set allow no current tab
-  void setAllowNoTab(bool allowNoTab);
-
-  //! get button style (icon and/or text)
-  Qt::ToolButtonStyle buttonStyle() const { return buttonStyle_; }
-  //! set button style (icon and/or text)
-  void setButtonStyle(const Qt::ToolButtonStyle &buttonStyle);
-
   //! get icon width
   int iconWidth() const { return iw_; }
 
-  //! set text for tab
+  //! get/set text for tab
+  QString tabText(int index) const;
   void setTabText(int index, const QString &text);
 
-  //! set icon for tab
+  //! get/set icon for tab
+  QIcon tabIcon(int index) const;
   void setTabIcon(int index, const QIcon &icon);
 
-  //! set tooltip for tab
+  //! get/set tooltip for tab
+  QString tabToolTip(int index) const;
   void setTabToolTip(int index, const QString &tip);
 
-  //! set whether tab is visible
+  //! get/set whether tab is visible
+  bool isTabVisible(int index) const;
   void setTabVisible(int index, bool visible);
 
-  //! set whether tab is pending
+  //! get/set whether tab is pending
+  bool isTabPending(int index) const;
   void setTabPending(int index, bool pending);
 
   //! get/set tab data
@@ -134,14 +153,10 @@ class CQTabBar : public QWidget {
   //! get index of tab at specified point
   int tabAt(const QPoint &p) const;
 
-  //! get icon size
-  QSize iconSize() const;
-
-  //! set icon size
-  void setIconSize(const QSize &size);
-
   //! update sizes of tabs
   void updateSizes();
+
+  int buttonsHeight() const { return buttonsHeight_; }
 
  private:
   //! get tab button
@@ -186,6 +201,11 @@ class CQTabBar : public QWidget {
   //! handle generic event
   bool event(QEvent *e) override;
 
+  //---
+
+  //! create menu
+  QMenu *createTabMenu() const;
+
   //! show scroll buttons
   void showScrollButtons(bool show);
 
@@ -198,7 +218,7 @@ class CQTabBar : public QWidget {
   //! set press state
   void setPressPoint(const QPoint &p);
 
- signals:
+ Q_SIGNALS:
   //! signal that the current tab has changed
   void currentChanged(int index);
 
@@ -217,7 +237,7 @@ class CQTabBar : public QWidget {
   //! request page move (to another palette group)
   void tabMovePageSignal(const QString &, int, const QString &, int);
 
- private slots:
+ private Q_SLOTS:
   //! handle left/bottom scroll button press
   void lscrollSlot();
   //! handle right/top scroll button press
@@ -226,24 +246,34 @@ class CQTabBar : public QWidget {
  private:
   using TabButtons = std::vector<CQTabBarButton *>;
 
-  TabButtons            buttons_;                  //! tab page buttons
-  int                   currentIndex_ { -1 };      //! current tab index (-1 if none)
-  Position              position_     { North };   //! tab position (relative to contents)
-  bool                  allowNoTab_   { false };   //! allow no current tab
-  Qt::ToolButtonStyle   buttonStyle_  { Qt::ToolButtonIconOnly };
-                                                   //! tab button style (text and/or icon)
-  CQTabBarScrollButton *lscroll_      { nullptr }; //! left/bottom scroll button if clipped
-  CQTabBarScrollButton *rscroll_      { nullptr }; //! right/top scroll button if clipped
-  QSize                 iconSize_     { 16, 16 };  //! icon size
-  mutable int           iw_           { 0 };       //! tab bar icon width
-  mutable int           w_            { 0 };       //! tab bar width
-  mutable int           h_            { 0 };       //! tab bar height
-  mutable int           clipNum_      { -1 };      //! first item clipped (-1 if none)
-  mutable int           offset_       { 0 };       //! scroll offset
-  mutable bool          pressed_      { false };   //! button pressed
-  mutable QPoint        pressPos_;                 //! button press pos (for drag)
-  mutable int           pressIndex_   { -1 };      //! tab at press position
-  mutable int           moveIndex_    { -1 };      //! tab at current mouse position
+  TabButtons buttons_;             //!< tab page buttons
+  int        currentIndex_ { -1 }; //!< current tab index (-1 if none)
+
+  Position position_   { Position::North }; //!< tab position (relative to contents)
+  bool     allowNoTab_ { false };           //!< allow no current tab
+
+  bool flowTabs_ { false }; //!< flow tabs
+
+  QColor pendingColor_ { Qt::red };
+
+  Qt::ToolButtonStyle buttonStyle_ { Qt::ToolButtonIconOnly };
+                                   //!< tab button style (text and/or icon)
+
+  QSize iconSize_ { 16, 16 }; //!< icon size
+
+  CQTabBarScrollButton *lscroll_ { nullptr }; //!< left/bottom scroll button if clipped
+  CQTabBarScrollButton *rscroll_ { nullptr }; //!< right/top scroll button if clipped
+
+  mutable int    iw_            { 0 };     //!< tab bar icon width
+  mutable int    w_             { 0 };     //!< tab bar width
+  mutable int    h_             { 0 };     //!< tab bar height
+  mutable int    buttonsHeight_ { 0 };     //!< buttons height
+  mutable int    clipNum_       { -1 };    //!< first item clipped (-1 if none)
+  mutable int    offset_        { 0 };     //!< scroll offset
+  mutable bool   pressed_       { false }; //!< button pressed
+  mutable QPoint pressPos_;                //!< button press pos (for drag)
+  mutable int    pressIndex_    { -1 };    //!< tab at press position
+  mutable int    moveIndex_     { -1 };    //!< tab at current mouse position
 };
 
 //---
@@ -251,6 +281,9 @@ class CQTabBar : public QWidget {
 /*! base class for tab bar button
 */
 class CQTabBarButton {
+ private:
+  enum { TAB_BORDER=8 };
+
  public:
   CQTabBarButton(CQTabBar *bar);
 
@@ -305,24 +338,27 @@ class CQTabBarButton {
   //! get pixmap of icon
   QPixmap pixmap() const;
 
-  //! calc button width
-  int width() const;
+  //! calc button width, height
+  int width () const;
+  int height() const;
 
  private:
   using Position = CQTabBar::Position;
 
-  CQTabBar*        bar_          { nullptr };         //! icon position
-  int              index_        { 0 };               //! index
-  QString          text_;                             //! text
-  QIcon            icon_;                             //! icon
-  QVariant         data_;                             //! data
+  CQTabBar*        bar_   { nullptr }; //! parent tab bar
+  int              index_ { 0 };       //! index
+  QString          text_;              //! text
+  QIcon            icon_;              //! icon
+  QVariant         data_;              //! data
+
   mutable QIcon    positionIcon_;                     //! icon for position (cached)
-  mutable Position iconPosition_ { CQTabBar::North }; //! position used for above (cached)
-  QString          toolTip_;                          //! tooltip
-  QWidget*         w_            { nullptr };         //! associated widget
-  bool             visible_      { true };            //! is visible
-  bool             pending_      { false };           //! is pending
-  QRect            r_;                                //! bounding box
+  mutable Position iconPosition_ { Position::North }; //! position used for above (cached)
+
+  QString  toolTip_;             //! tooltip
+  QWidget* w_       { nullptr }; //! associated widget
+  bool     visible_ { true };    //! is visible
+  bool     pending_ { false };   //! is pending
+  QRect    r_;                   //! bounding box
 };
 
 //---

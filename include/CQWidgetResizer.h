@@ -17,7 +17,7 @@ class CQWidgetResizer : public QObject {
     Any    = Move | Resize
   };
 
-  explicit CQWidgetResizer(QWidget *parent, QWidget *cw = 0);
+  explicit CQWidgetResizer(QWidget *parent, QWidget *cw = nullptr);
 
   // set active for move and resize
   void setActive(bool b) { setActive(Any, b); }
